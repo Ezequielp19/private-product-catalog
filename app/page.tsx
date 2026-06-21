@@ -1,0 +1,214 @@
+import Link from "next/link"
+import Image from "next/image"
+import { createClient } from "@/lib/supabase/server"
+import { APP_CONFIG } from "@/src/config/app-config"
+import { Badge } from "@/components/ui/badge"
+import { LinkButton } from "@/components/ui/link-button"
+import { ArrowRight, Camera, MessageCircle, ShieldCheck } from "lucide-react"
+
+export const dynamic = "force-dynamic"
+
+type HomeProduct = {
+  id: string
+  nombre: string
+  descripcion: string
+  imagen: string | null
+  categoria: string | null
+}
+
+export default async function HomePage() {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from("products")
+    .select("id, nombre, descripcion, imagen, categoria")
+    .eq("activo", true)
+    .order("created_at", { ascending: false })
+    .limit(8)
+
+  const products = (data ?? []) as HomeProduct[]
+  const categories = Array.from(
+    new Set(products.map((product) => product.categoria).filter(Boolean)),
+  ).slice(0, 6) as string[]
+
+  const whatsappUrl = `https://wa.me/${APP_CONFIG.whatsappNumber}?text=${encodeURIComponent(
+    "Hola, quiero hacer una consulta sobre productos.",
+  )}`
+
+  return (
+    <main className="overflow-hidden">
+      <section className="border-b bg-gradient-to-b from-sky-100 via-white to-white">
+        <div className="mx-auto grid min-h-[calc(100svh-4rem)] max-w-6xl items-center gap-10 px-4 py-10 lg:grid-cols-[1.15fr_0.85fr] lg:px-6">
+          <div className="space-y-6">
+            <div className="flex items-center gap-3">
+              <span className="relative size-14 overflow-hidden rounded-2xl border bg-white shadow-sm">
+                <Image
+                  src="/Gemini_Generated_Image_bfyoghbfyoghbfyo-removebg-preview.png"
+                  alt={`${APP_CONFIG.companyName} logo`}
+                  fill
+                  sizes="56px"
+                  className="object-cover"
+                />
+              </span>
+              <div>
+                <p className="text-xs uppercase tracking-[0.28em] text-muted-foreground">
+                  Mayorista
+                </p>
+                <p className="text-lg font-semibold">{APP_CONFIG.companyName}</p>
+              </div>
+            </div>
+
+            <Badge className="rounded-full px-3 py-1 text-xs uppercase tracking-[0.24em]">
+              Venta mayorista
+            </Badge>
+
+            <div className="space-y-4">
+              <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-balance sm:text-5xl lg:text-6xl">
+                {APP_CONFIG.companyName} para comprar mejor, con catálogo abierto
+                y precios para aprobados.
+              </h1>
+              <p className="max-w-2xl text-pretty text-base text-muted-foreground sm:text-lg">
+                Navegá el catálogo, explorá productos y pedí acceso para ver
+                precios mayoristas, armar carrito y finalizar por WhatsApp.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <LinkButton href="/catalogo" size="lg">
+                Ver catálogo
+                <ArrowRight className="size-4" />
+              </LinkButton>
+              <LinkButton href="/login" variant="outline" size="lg">
+                Ingresar
+              </LinkButton>
+              <LinkButton href="/register" variant="ghost" size="lg">
+                Registrarse
+              </LinkButton>
+              <LinkButton href={APP_CONFIG.instagramUrl} variant="ghost" size="lg" target="_blank" rel="noreferrer">
+                <Camera className="size-4" />
+                Instagram
+              </LinkButton>
+            </div>
+
+            <div className="grid gap-3 pt-2 sm:grid-cols-3">
+              {["Catálogo abierto", "Aprobación manual", "Pedido por WhatsApp"].map(
+                (item) => (
+                  <div key={item} className="rounded-2xl border bg-card/80 p-4">
+                    <div className="mb-3 flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                      <ShieldCheck className="size-5" />
+                    </div>
+                    <p className="font-medium">{item}</p>
+                  </div>
+                ),
+              )}
+            </div>
+          </div>
+
+          <div className="relative">
+            <div className="absolute inset-0 -z-10 rounded-[2rem] bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,.24),_transparent_42%),radial-gradient(circle_at_bottom_right,_rgba(14,165,233,.18),_transparent_38%)]" />
+            <div className="grid gap-4 rounded-[2rem] border bg-card/90 p-4 shadow-2xl shadow-primary/5 backdrop-blur">
+              <div className="rounded-[1.5rem] bg-muted p-4">
+                <p className="text-sm font-medium text-muted-foreground">
+                  Productos destacados
+                </p>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  {products.slice(0, 4).map((product) => (
+                    <Link
+                      key={product.id}
+                      href={`/producto/${product.id}`}
+                      className="group overflow-hidden rounded-2xl border bg-background transition hover:-translate-y-1 hover:shadow-md"
+                    >
+                      <div className="relative aspect-square overflow-hidden bg-muted">
+                        {product.imagen ? (
+                          <Image
+                            src={product.imagen}
+                            alt={product.nombre}
+                            fill
+                            sizes="(max-width: 640px) 50vw, 240px"
+                            className="object-cover transition-transform duration-300 group-hover:scale-105"
+                          />
+                        ) : null}
+                      </div>
+                      <div className="space-y-1 p-3">
+                        <h3 className="line-clamp-1 font-medium">
+                          {product.nombre}
+                        </h3>
+                        <p className="line-clamp-2 text-sm text-muted-foreground">
+                          {product.descripcion || "Sin descripción."}
+                        </p>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl border bg-background p-4">
+                  <p className="text-sm text-muted-foreground">Contacto rápido</p>
+                  <a
+                    href={whatsappUrl}
+                    className="mt-2 inline-flex items-center gap-2 font-medium text-primary"
+                  >
+                    <MessageCircle className="size-4" />
+                    WhatsApp
+                  </a>
+                </div>
+                <div className="rounded-2xl border bg-background p-4">
+                  <p className="text-sm text-muted-foreground">
+                    Acceso mayorista
+                  </p>
+                  <p className="mt-2 font-medium">
+                    Registrate y espera aprobación.
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-[1.5rem] border bg-gradient-to-br from-sky-100 to-white p-4">
+                <p className="text-sm text-muted-foreground">Seguinos en redes</p>
+                <a
+                  href={APP_CONFIG.instagramUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2 inline-flex items-center gap-2 font-medium text-primary"
+                >
+                  <Camera className="size-4" />
+                  Instagram @lmproductos
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-6xl px-4 py-16">
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium uppercase tracking-[0.2em] text-muted-foreground">
+              Categorías
+            </p>
+            <h2 className="mt-2 text-3xl font-semibold tracking-tight">
+              Movimientos rápidos para entrar al catálogo
+            </h2>
+          </div>
+          <Link href="/catalogo" className="hidden text-sm font-medium sm:inline-flex">
+            Ver todo
+          </Link>
+        </div>
+
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {categories.length > 0 ? (
+            categories.map((category) => (
+              <div key={category} className="rounded-3xl border bg-card p-5">
+                <p className="text-sm text-muted-foreground">Categoría</p>
+                <p className="mt-2 text-xl font-semibold">{category}</p>
+              </div>
+            ))
+          ) : (
+            <div className="rounded-3xl border border-dashed bg-card p-8 text-muted-foreground sm:col-span-3">
+              Aún no hay categorías cargadas.
+            </div>
+          )}
+        </div>
+      </section>
+    </main>
+  )
+}
