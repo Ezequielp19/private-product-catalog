@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import Link from "next/link"
 import Image from "next/image"
 import { createClient } from "@/lib/supabase/client"
 import { useCart } from "@/lib/cart-context"
@@ -45,7 +44,10 @@ export default function CarritoPage() {
 
   const whatsappUrl = useMemo(() => {
     const lineas = items
-      .map((i) => `• ${i.nombre} x${i.cantidad} — ${formatPrice(i.precio * i.cantidad)}`)
+      .map((item) => {
+        const variante = item.varianteNombre ? ` (${item.varianteNombre})` : ""
+        return `- ${item.nombre}${variante} x${item.cantidad} - ${formatPrice(item.precio * item.cantidad)}`
+      })
       .join("\n")
 
     const mensaje =
@@ -98,8 +100,8 @@ export default function CarritoPage() {
       <main className="mx-auto max-w-3xl px-4 py-16">
         <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed py-16 text-center text-muted-foreground">
           <ShoppingCart className="size-10" />
-          <p>Tu carrito está vacío.</p>
-          <LinkButton href="/catalogo">Ir al catálogo</LinkButton>
+          <p>Tu carrito esta vacio.</p>
+          <LinkButton href="/catalogo">Ir al catalogo</LinkButton>
         </div>
       </main>
     )
@@ -144,9 +146,10 @@ export default function CarritoPage() {
 
               <div className="min-w-0 flex-1">
                 <p className="line-clamp-1 font-medium">{item.nombre}</p>
-                <p className="text-sm text-muted-foreground">
-                  {formatPrice(item.precio)}
-                </p>
+                {item.varianteNombre ? (
+                  <p className="text-sm text-muted-foreground">{item.varianteNombre}</p>
+                ) : null}
+                <p className="text-sm text-muted-foreground">{formatPrice(item.precio)}</p>
               </div>
 
               <div className="flex items-center rounded-lg border">

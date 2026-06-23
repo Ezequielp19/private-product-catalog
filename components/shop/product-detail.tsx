@@ -6,6 +6,7 @@ import { toast } from "sonner"
 import type { Product } from "@/lib/types"
 import { useCart } from "@/lib/cart-context"
 import { formatPrice } from "@/lib/format"
+import { hasProductVariants, normalizeProductVariants } from "@/lib/product-pricing"
 import { Button } from "@/components/ui/button"
 import { ShoppingCart, ImageOff, Minus, Plus } from "lucide-react"
 
@@ -13,6 +14,20 @@ export function ProductDetail({ product }: { product: Product }) {
   const { addItem } = useCart()
   const [cantidad, setCantidad] = useState(1)
   const [adding, setAdding] = useState(false)
+  const variants = normalizeProductVariants(product.variantes)
+  const isVariantProduct = hasProductVariants(product)
+  const [selectedVariantName, setSelectedVariantName] = useState(
+    variants[0]?.nombre ?? "",
+  )
+
+  const selectedVariant =
+    variants.find((variant) => variant.nombre === selectedVariantName) ?? variants[0]
+  const selectedPrice = selectedVariant?.precio ?? product.precio
+  const priceLabel = isVariantProduct
+    ? selectedVariant
+      ? `${selectedVariant.nombre} - ${formatPrice(selectedVariant.precio)}`
+      : formatPrice(product.precio)
+    : formatPrice(product.precio)
 
   return (
     <div className="grid gap-6 md:grid-cols-2 lg:gap-8">
@@ -37,12 +52,28 @@ export function ProductDetail({ product }: { product: Product }) {
         <h1 className="text-2xl font-semibold tracking-tight text-balance">
           {product.nombre}
         </h1>
-        <span className="text-3xl font-bold text-primary">
-          {formatPrice(product.precio)}
-        </span>
+        <span className="text-3xl font-bold text-primary">{priceLabel}</span>
         <p className="whitespace-pre-line leading-relaxed text-muted-foreground">
-          {product.descripcion || "Sin descripción."}
+          {product.descripcion || "Sin descripcion."}
         </p>
+
+        {isVariantProduct ? (
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Elegi una variante</p>
+            <div className="flex flex-wrap gap-2">
+              {variants.map((variant) => (
+                <Button
+                  key={variant.nombre}
+                  type="button"
+                  variant={selectedVariantName === variant.nombre ? "default" : "outline"}
+                  onClick={() => setSelectedVariantName(variant.nombre)}
+                >
+                  {variant.nombre} - {formatPrice(variant.precio)}
+                </Button>
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="flex w-full items-center justify-between rounded-lg border sm:w-auto">
@@ -72,9 +103,15 @@ export function ProductDetail({ product }: { product: Product }) {
             disabled={adding}
             onClick={() => {
               setAdding(true)
-              addItem(product, cantidad)
+              addItem(product, cantidad, {
+                variantName: isVariantProduct ? selectedVariant?.nombre ?? null : null,
+                price: isVariantProduct ? selectedPrice : product.precio,
+              })
               toast.success("Agregado al carrito", {
-                description: `${cantidad} x ${product.nombre}`,
+                description:
+                  isVariantProduct && selectedVariant
+                    ? `${cantidad} x ${product.nombre} - ${selectedVariant.nombre}`
+                    : `${cantidad} x ${product.nombre}`,
               })
               setAdding(false)
             }}

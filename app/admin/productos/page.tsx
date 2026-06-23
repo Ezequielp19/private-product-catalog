@@ -4,6 +4,11 @@ import { useEffect, useMemo, useState } from "react"
 import Image from "next/image"
 import { createClient } from "@/lib/supabase/client"
 import type { Product } from "@/lib/types"
+import {
+  getProductPriceText,
+  hasProductVariants,
+  normalizeProductVariants,
+} from "@/lib/product-pricing"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -43,13 +48,35 @@ type AdminProduct = Product & {
   categoria: string | null
 }
 
+type ProductPricingMode = "single" | "variants"
+
+type ProductVariantForm = {
+  nombre: string
+  precio: string
+}
+
 type ProductFormState = {
   nombre: string
   descripcion: string
   categoria: string
   precio: string
+  pricingMode: ProductPricingMode
+  variantes: ProductVariantForm[]
   activo: boolean
   imagen: string | null
+}
+
+const defaultVariantNames = ["Chico", "Mediano", "Grande"]
+
+function createDefaultVariants(): ProductVariantForm[] {
+  return defaultVariantNames.map((nombre) => ({ nombre, precio: "" }))
+}
+
+function hydrateFixedVariants(source: ProductVariantForm[]) {
+  return defaultVariantNames.map((nombre) => {
+    const match = source.find((variant) => variant.nombre === nombre)
+    return { nombre, precio: match?.precio ?? "" }
+  })
 }
 
 const emptyForm: ProductFormState = {
@@ -57,6 +84,8 @@ const emptyForm: ProductFormState = {
   descripcion: "",
   categoria: "",
   precio: "",
+  pricingMode: "single",
+  variantes: [],
   activo: true,
   imagen: null,
 }
@@ -64,6 +93,7 @@ const emptyForm: ProductFormState = {
 export default function AdminProductosPage() {
   const [products, setProducts] = useState<AdminProduct[]>([])
   const [loading, setLoading] = useState(true)
+  const [variantSchemaReady, setVariantSchemaReady] = useState(false)
   const [saving, setSaving] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [query, setQuery] = useState("")
@@ -75,14 +105,21 @@ export default function AdminProductosPage() {
 
   useEffect(() => {
     loadProducts()
+    checkVariantSchema()
   }, [])
+
+  async function checkVariantSchema() {
+    const supabase = createClient()
+    const { error } = await supabase.from("products").select("modo_precio, variantes").limit(1)
+    setVariantSchemaReady(!error)
+  }
 
   async function loadProducts() {
     setLoading(true)
     const supabase = createClient()
     const { data, error } = await supabase
       .from("products")
-      .select("id, nombre, descripcion, precio, imagen, categoria, activo, created_at")
+      .select("*")
       .order("created_at", { ascending: false })
 
     if (error) {
@@ -117,12 +154,21 @@ export default function AdminProductosPage() {
   }
 
   function openEdit(product: AdminProduct) {
+    const variants = hydrateFixedVariants(
+      normalizeProductVariants(product.variantes).map((variant) => ({
+        nombre: variant.nombre,
+        precio: String(variant.precio),
+      })),
+    )
+
     setEditing(product)
     setForm({
       nombre: product.nombre,
       descripcion: product.descripcion ?? "",
       categoria: product.categoria ?? "",
       precio: String(product.precio ?? ""),
+      pricingMode: product.modo_precio === "variants" ? "variants" : "single",
+      variantes: product.modo_precio === "variants" ? variants : [],
       activo: product.activo,
       imagen: product.imagen ?? null,
     })
@@ -152,6 +198,55 @@ export default function AdminProductosPage() {
   async function saveProduct() {
     if (!form.nombre.trim()) {
       toast.error("El nombre es obligatorio.")
+      return
+    }
+
+    if (form.pricingMode === "variants") {
+      if (!variantSchemaReady) {
+        toast.error("Falta aplicar la migracion de variantes.")
+        return
+      }
+
+      const fixedVariants = hydrateFixedVariants(form.variantes)
+      const hasMissingPrice = fixedVariants.some((variant) => !variant.precio.trim())
+
+      if (hasMissingPrice) {
+        toast.error("Completa el precio de Chico, Mediano y Grande.")
+        return
+      }
+      const variantPayload = fixedVariants.map((variant) => ({
+        nombre: variant.nombre,
+        precio: Number(variant.precio) || 0,
+      }))
+      const basePrice = Math.min(...variantPayload.map((variant) => variant.precio))
+
+      setSaving(true)
+      const supabase = createClient()
+      const payload = {
+        nombre: form.nombre.trim(),
+        descripcion: form.descripcion.trim(),
+        categoria: form.categoria.trim() || null,
+        precio: basePrice,
+        modo_precio: form.pricingMode,
+        variantes: variantPayload,
+        activo: form.activo,
+        imagen: form.imagen,
+      }
+
+      const { error } = editing
+        ? await supabase.from("products").update(payload).eq("id", editing.id)
+        : await supabase.from("products").insert(payload)
+
+      setSaving(false)
+
+      if (error) {
+        toast.error("No se pudo guardar el producto.")
+        return
+      }
+
+      toast.success(editing ? "Producto actualizado" : "Producto creado")
+      setDialogOpen(false)
+      await loadProducts()
       return
     }
 
@@ -216,6 +311,34 @@ export default function AdminProductosPage() {
     await loadProducts()
   }
 
+  function updateVariantPrice(index: number, value: string) {
+    setForm((current) => ({
+      ...current,
+      variantes: current.variantes.map((variant, currentIndex) =>
+        currentIndex === index ? { ...variant, precio: value } : variant,
+      ),
+    }))
+  }
+
+  function setPricingMode(pricingMode: ProductPricingMode) {
+    setForm((current) => ({
+      ...current,
+      pricingMode,
+      variantes:
+        pricingMode === "variants"
+          ? createDefaultVariants()
+          : [],
+    }))
+  }
+
+  function loadFixedVariants() {
+    setForm((current) => ({
+      ...current,
+      pricingMode: "variants",
+      variantes: createDefaultVariants(),
+    }))
+  }
+
   return (
     <main className="mx-auto max-w-6xl px-4 py-6 sm:py-8 md:px-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -224,6 +347,11 @@ export default function AdminProductosPage() {
           <p className="mt-1 text-sm text-muted-foreground">
             Gestiona el catalogo, imagenes, estado y precios.
           </p>
+          {!variantSchemaReady ? (
+            <p className="mt-2 text-sm text-amber-600">
+              Para usar variantes, ejecuta primero <span className="font-medium">scripts/005_product_variants.sql</span>.
+            </p>
+          ) : null}
         </div>
 
         <Button onClick={openNew} className="w-full sm:w-auto">
@@ -304,7 +432,16 @@ export default function AdminProductosPage() {
                     </div>
                   </TableCell>
                   <TableCell>{product.categoria || "Sin categoria"}</TableCell>
-                  <TableCell>${Number(product.precio || 0).toLocaleString("es-AR")}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-col">
+                      <span>{getProductPriceText(product)}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {hasProductVariants(product)
+                          ? `${normalizeProductVariants(product.variantes).length} variantes`
+                          : "Sin variantes"}
+                      </span>
+                    </div>
+                  </TableCell>
                   <TableCell>
                     <Badge variant={product.activo ? "default" : "secondary"}>
                       {product.activo ? "Activo" : "Inactivo"}
@@ -418,14 +555,66 @@ export default function AdminProductosPage() {
 
               <div className="flex flex-col gap-2">
                 <Label htmlFor="precio">Precio</Label>
-                <Input
-                  id="precio"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.precio}
-                  onChange={(e) => setForm((current) => ({ ...current, precio: e.target.value }))}
-                />
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant={form.pricingMode === "single" ? "default" : "outline"}
+                    onClick={() => setPricingMode("single")}
+                  >
+                    Sin variantes
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={form.pricingMode === "variants" ? "default" : "outline"}
+                    onClick={() => setPricingMode("variants")}
+                    disabled={!variantSchemaReady}
+                  >
+                    Con variantes
+                  </Button>
+                </div>
+
+                {form.pricingMode === "single" ? (
+                  <Input
+                    id="precio"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.precio}
+                    onChange={(e) =>
+                      setForm((current) => ({ ...current, precio: e.target.value }))
+                    }
+                    placeholder="0"
+                  />
+                ) : (
+                  <div className="space-y-3 rounded-xl border bg-muted/20 p-3">
+                    <p className="text-xs text-muted-foreground">
+                      Solo se usan estas variantes: Chico, Mediano y Grande.
+                    </p>
+                    <Button type="button" variant="outline" onClick={loadFixedVariants} className="w-full">
+                      Cargar Chico / Mediano / Grande
+                    </Button>
+                    <div className="space-y-2">
+                      {form.variantes.map((variant, index) => (
+                        <div
+                          key={variant.nombre}
+                          className="grid gap-2 md:grid-cols-[120px_1fr]"
+                        >
+                          <div className="flex items-center rounded-lg border bg-background px-3 text-sm font-medium">
+                            {variant.nombre}
+                          </div>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={variant.precio}
+                            onChange={(e) => updateVariantPrice(index, e.target.value)}
+                            placeholder="Precio"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex flex-col gap-2 md:col-span-2">

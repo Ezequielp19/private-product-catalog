@@ -22,6 +22,8 @@ create table if not exists public.products (
   descripcion text not null default '',
   categoria text,
   precio numeric(12, 2) not null default 0,
+  modo_precio text not null default 'single',
+  variantes jsonb not null default '[]'::jsonb,
   imagen text,
   activo boolean not null default true,
   created_at timestamptz not null default now()
@@ -29,6 +31,10 @@ create table if not exists public.products (
 
 alter table if exists public.products
   add column if not exists categoria text;
+alter table if exists public.products
+  add column if not exists modo_precio text not null default 'single';
+alter table if exists public.products
+  add column if not exists variantes jsonb not null default '[]'::jsonb;
 
 create index if not exists products_activo_idx on public.products (activo);
 create index if not exists profiles_approved_idx on public.profiles (approved);

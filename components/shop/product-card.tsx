@@ -6,13 +6,15 @@ import { useState } from "react"
 import { toast } from "sonner"
 import type { Product } from "@/lib/types"
 import { useCart } from "@/lib/cart-context"
-import { formatPrice } from "@/lib/format"
 import { Button } from "@/components/ui/button"
+import { LinkButton } from "@/components/ui/link-button"
+import { hasProductVariants, getProductPriceText } from "@/lib/product-pricing"
 import { ShoppingCart, ImageOff } from "lucide-react"
 
 export function ProductCard({ product }: { product: Product }) {
   const { addItem } = useCart()
   const [adding, setAdding] = useState(false)
+  const hasVariants = hasProductVariants(product)
 
   return (
     <div className="group flex flex-col overflow-hidden rounded-xl border bg-card transition-shadow hover:shadow-md">
@@ -47,28 +49,34 @@ export function ProductCard({ product }: { product: Product }) {
 
         <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <span className="text-lg font-semibold">
-            {formatPrice(product.precio)}
+            {getProductPriceText(product)}
           </span>
-          <Button
-            size="sm"
-            disabled={adding}
-            className="w-full sm:w-auto"
-            onClick={() => {
-              setAdding(true)
-              addItem(product)
-              toast.success("Agregado al carrito", {
-                description: product.nombre,
-              })
-              setAdding(false)
-            }}
-          >
-            {adding ? (
-              <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-            ) : (
-              <ShoppingCart className="size-4" />
-            )}
-            {adding ? "Agregando..." : "Agregar"}
-          </Button>
+          {hasVariants ? (
+            <LinkButton href={`/producto/${product.id}`} size="sm" className="w-full sm:w-auto">
+              Ver variantes
+            </LinkButton>
+          ) : (
+            <Button
+              size="sm"
+              disabled={adding}
+              className="w-full sm:w-auto"
+              onClick={() => {
+                setAdding(true)
+                addItem(product)
+                toast.success("Agregado al carrito", {
+                  description: product.nombre,
+                })
+                setAdding(false)
+              }}
+            >
+              {adding ? (
+                <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              ) : (
+                <ShoppingCart className="size-4" />
+              )}
+              {adding ? "Agregando..." : "Agregar"}
+            </Button>
+          )}
         </div>
       </div>
     </div>

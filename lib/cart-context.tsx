@@ -16,7 +16,11 @@ type CartContextValue = {
   items: CartItem[]
   count: number
   total: number
-  addItem: (product: Product, cantidad?: number) => void
+  addItem: (
+    product: Product,
+    cantidad?: number,
+    options?: { variantName?: string | null; price?: number },
+  ) => void
   removeItem: (id: string) => void
   setQuantity: (id: string, cantidad: number) => void
   clear: () => void
@@ -49,12 +53,20 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   }, [items, hydrated])
 
-  function addItem(product: Product, cantidad = 1) {
+  function addItem(
+    product: Product,
+    cantidad = 1,
+    options?: { variantName?: string | null; price?: number },
+  ) {
+    const variantName = options?.variantName ?? null
+    const itemId = variantName ? `${product.id}:${variantName}` : product.id
+    const itemPrice = options?.price ?? product.precio
+
     setItems((prev) => {
-      const existing = prev.find((i) => i.id === product.id)
+      const existing = prev.find((i) => i.id === itemId)
       if (existing) {
         return prev.map((i) =>
-          i.id === product.id
+          i.id === itemId
             ? { ...i, cantidad: i.cantidad + cantidad }
             : i,
         )
@@ -62,11 +74,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
       return [
         ...prev,
         {
-          id: product.id,
+          id: itemId,
           nombre: product.nombre,
-          precio: product.precio,
+          precio: itemPrice,
           imagen: product.imagen,
           cantidad,
+          varianteNombre: variantName,
         },
       ]
     })
