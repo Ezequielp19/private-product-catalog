@@ -1,6 +1,6 @@
 "use client"
 
-import { MessageCircle } from "lucide-react"
+import Image from "next/image"
 import { APP_CONFIG } from "@/src/config/app-config"
 
 export function WhatsAppFloatingButton() {
@@ -17,7 +17,7 @@ export function WhatsAppFloatingButton() {
       className="fixed bottom-5 right-5 z-50 inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white px-4 py-3 text-sm font-semibold text-sky-950 shadow-lg shadow-sky-900/10 transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-sky-900/15"
     >
       <span className="inline-flex size-9 items-center justify-center rounded-full bg-green-500 text-white">
-        <MessageCircle className="size-5" />
+        <Image src="/whatsapp.svg" alt="" width={20} height={20} className="size-5" />
       </span>
       <span className="hidden sm:inline">WhatsApp</span>
     </a>

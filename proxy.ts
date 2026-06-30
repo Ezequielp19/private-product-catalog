@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 import { APP_CONFIG } from "@/src/config/app-config"
 
-const PUBLIC_PATHS = ["/", "/login", "/register", "/recuperar", "/catalogo", "/producto", "/contacto"]
+const PUBLIC_PATHS = ["/", "/login", "/register", "/recuperar", "/catalogo", "/producto", "/contacto", "/carrito"]
 const AUTH_PATHS = ["/login", "/register", "/recuperar"]
 
 function matchesPath(pathname: string, path: string) {
@@ -40,8 +40,6 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
   const isPublic = PUBLIC_PATHS.some((path) => matchesPath(pathname, path))
   const isAdminRoute = pathname.startsWith("/admin")
-  const isProtectedCart = pathname.startsWith("/carrito")
-
   if (!user) {
     if (isPublic) return supabaseResponse
     const url = request.nextUrl.clone()
@@ -61,20 +59,6 @@ export async function proxy(request: NextRequest) {
     const url = request.nextUrl.clone()
     url.pathname = "/catalogo"
     return NextResponse.redirect(url)
-  }
-
-  if (isProtectedCart && !isAdmin) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("approved")
-      .eq("id", user.id)
-      .maybeSingle()
-
-    if (!profile?.approved) {
-      const url = request.nextUrl.clone()
-      url.pathname = "/pendiente"
-      return NextResponse.redirect(url)
-    }
   }
 
   return supabaseResponse

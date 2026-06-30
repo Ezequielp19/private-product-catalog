@@ -64,11 +64,11 @@ export default async function HomePage() {
             <div className="space-y-4">
               <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-balance sm:text-5xl lg:text-6xl">
                 {APP_CONFIG.companyName} para comprar mejor, con catálogo abierto
-                y precios para aprobados.
+                y precios visibles.
               </h1>
               <p className="max-w-2xl text-pretty text-base text-muted-foreground sm:text-lg">
-                Navegá el catálogo, explorá productos y pedí acceso para ver
-                precios mayoristas, armar carrito y finalizar por WhatsApp.
+                Navegá el catálogo, consultá precios, armá tu carrito y finalizá
+                tu pedido por WhatsApp sin necesidad de registrarte.
               </p>
             </div>
 
@@ -77,11 +77,8 @@ export default async function HomePage() {
                 Ver catálogo
                 <ArrowRight className="size-4" />
               </LinkButton>
-              <LinkButton href="/login" variant="outline" size="lg">
-                Ingresar
-              </LinkButton>
-              <LinkButton href="/register" variant="ghost" size="lg">
-                Registrarse
+              <LinkButton href="/carrito" variant="outline" size="lg">
+                Ver carrito
               </LinkButton>
               <LinkButton href={APP_CONFIG.instagramUrl} variant="ghost" size="lg" target="_blank" rel="noreferrer">
                 <Camera className="size-4" />
@@ -90,7 +87,7 @@ export default async function HomePage() {
             </div>
 
             <div className="grid gap-3 pt-2 sm:grid-cols-3">
-              {["Catálogo abierto", "Aprobación manual", "Pedido por WhatsApp"].map(
+              {["Catálogo abierto", "Precios visibles", "Pedido por WhatsApp"].map(
                 (item) => (
                   <div key={item} className="rounded-2xl border bg-card/80 p-4">
                     <div className="mb-3 flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
@@ -154,10 +151,10 @@ export default async function HomePage() {
                 </div>
                 <div className="rounded-2xl border bg-background p-4">
                   <p className="text-sm text-muted-foreground">
-                    Acceso mayorista
+                    Compra simple
                   </p>
                   <p className="mt-2 font-medium">
-                    Registrate y espera aprobación.
+                    Agregá al carrito y pedí por WhatsApp.
                   </p>
                 </div>
               </div>
@@ -197,10 +194,16 @@ export default async function HomePage() {
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {categories.length > 0 ? (
             categories.map((category) => (
-              <div key={category} className="rounded-3xl border bg-card p-5">
+              <Link
+                key={category}
+                href={`/catalogo?categoria=${encodeURIComponent(category)}`}
+                className="group rounded-3xl border bg-card p-5 transition hover:-translate-y-1 hover:border-primary/30 hover:shadow-md"
+              >
                 <p className="text-sm text-muted-foreground">Categoría</p>
-                <p className="mt-2 text-xl font-semibold">{category}</p>
-              </div>
+                <p className="mt-2 text-xl font-semibold group-hover:text-primary">
+                  {category}
+                </p>
+              </Link>
             ))
           ) : (
             <div className="rounded-3xl border border-dashed bg-card p-8 text-muted-foreground sm:col-span-3">

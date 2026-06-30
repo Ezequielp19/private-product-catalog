@@ -6,8 +6,7 @@ import { useEffect, useState, type ReactNode } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { APP_CONFIG } from "@/src/config/app-config"
-import { CartProvider, useCart } from "@/lib/cart-context"
-import { Badge } from "@/components/ui/badge"
+import { useCart } from "@/lib/cart-context"
 import { Button } from "@/components/ui/button"
 import { LinkButton } from "@/components/ui/link-button"
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
@@ -17,7 +16,6 @@ import {
   LogIn,
   LogOut,
   ShoppingCart,
-  UserPlus,
   House,
   Menu,
 } from "lucide-react"
@@ -27,6 +25,12 @@ type ViewerState = {
   admin: boolean
   approved: boolean
 }
+
+const headerNavButtonClass =
+  "h-10 min-h-10 rounded-full border-2 px-5 text-sm font-semibold shadow-sm gap-2 [&_svg]:size-[1.125rem]"
+
+const mobileNavButtonClass =
+  "h-11 w-full justify-start rounded-xl border-2 px-4 text-sm font-semibold gap-2 [&_svg]:size-[1.125rem]"
 
 function ShopHeader({ viewer }: { viewer: ViewerState }) {
   const { count } = useCart()
@@ -45,8 +49,8 @@ function ShopHeader({ viewer }: { viewer: ViewerState }) {
 
   return (
     <header className="sticky top-0 z-40 border-b border-sky-200/70 bg-white/85 backdrop-blur-xl">
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-3 px-4">
-        <Link href="/catalogo" className="flex items-center gap-2">
+      <div className="mx-auto flex h-[4.5rem] max-w-6xl items-center justify-between gap-3 px-4">
+        <Link href="/" className="flex items-center gap-2">
           <span className="relative size-9 overflow-hidden rounded-xl border bg-background">
             <Image
               src="/logo%20personita.png"
@@ -61,14 +65,28 @@ function ShopHeader({ viewer }: { viewer: ViewerState }) {
             </span>
           </Link>
 
-        <nav className="hidden flex-nowrap items-center gap-1 overflow-x-auto md:flex sm:gap-2">
+        <nav className="hidden flex-nowrap items-center gap-2 overflow-x-auto md:flex">
           <LinkButton
             href="/catalogo"
             variant={pathname === "/catalogo" ? "default" : "outline"}
-            size="sm"
-            className="rounded-full px-4"
+            className={headerNavButtonClass}
           >
             Catálogo
+          </LinkButton>
+
+          <LinkButton
+            href="/carrito"
+            variant="outline"
+            className={headerNavButtonClass}
+            aria-label="Carrito"
+          >
+            <ShoppingCart />
+            <span className="hidden sm:inline">Carrito</span>
+            {count > 0 ? (
+              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-sky-600 px-1.5 text-[11px] font-bold leading-none text-white">
+                {count}
+              </span>
+            ) : null}
           </LinkButton>
 
           {viewer.authenticated ? (
@@ -77,80 +95,48 @@ function ShopHeader({ viewer }: { viewer: ViewerState }) {
                 <LinkButton
                   href="/admin"
                   variant="outline"
-                  size="sm"
-                  className="rounded-full px-4"
+                  className={headerNavButtonClass}
                 >
-                  <LayoutDashboard className="size-4" />
+                  <LayoutDashboard />
                   <span className="hidden sm:inline">Admin</span>
                 </LinkButton>
               ) : null}
 
-              {viewer.approved || viewer.admin ? (
-                <LinkButton
-                  href="/carrito"
-                  variant="outline"
-                  size="sm"
-                  className="relative rounded-full px-4"
-                  aria-label="Carrito"
-                >
-                  <ShoppingCart className="size-4" />
-                  <span className="hidden sm:inline">Carrito</span>
-                  {count > 0 ? (
-                    <Badge className="absolute -right-1 -top-1 size-5 justify-center rounded-full p-0 text-[10px]">
-                      {count}
-                    </Badge>
-                  ) : null}
-                </LinkButton>
-              ) : (
-                <Badge variant="secondary" className="rounded-full px-3">
-                  Pendiente
-                </Badge>
-              )}
-
               <Button
                 variant="outline"
-                size="sm"
                 onClick={logout}
-                className="rounded-full px-4"
+                className={headerNavButtonClass}
                 disabled={loggingOut}
               >
                 {loggingOut ? (
-                  <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  <span className="size-[1.125rem] animate-spin rounded-full border-2 border-current border-t-transparent" />
                 ) : (
-                  <LogOut className="size-4" />
+                  <LogOut />
                 )}
                 <span className="hidden sm:inline">Salir</span>
               </Button>
-
-              <LinkButton
-                href={APP_CONFIG.instagramUrl}
-                target="_blank"
-                rel="noreferrer"
-                variant="ghost"
-                size="sm"
-                className="rounded-full px-3"
-              >
-                <Camera className="size-4" />
-                <span className="hidden sm:inline">Instagram</span>
-              </LinkButton>
             </>
           ) : (
-            <>
-              <LinkButton
-                href="/login"
-                variant="outline"
-                size="sm"
-                className="rounded-full px-4"
-              >
-                <LogIn className="size-4" />
-                <span className="hidden sm:inline">Ingresar</span>
-              </LinkButton>
-              <LinkButton href="/register" size="sm" className="rounded-full px-4">
-                <UserPlus className="size-4" />
-                <span className="hidden sm:inline">Registrarse</span>
-              </LinkButton>
-            </>
+            <LinkButton
+              href="/login"
+              variant="outline"
+              className={headerNavButtonClass}
+            >
+              <LogIn />
+              <span className="hidden sm:inline">Ingresar</span>
+            </LinkButton>
           )}
+
+          <LinkButton
+            href={APP_CONFIG.instagramUrl}
+            target="_blank"
+            rel="noreferrer"
+            variant="outline"
+            className={headerNavButtonClass}
+          >
+            <Camera />
+            <span className="hidden sm:inline">Instagram</span>
+          </LinkButton>
         </nav>
 
         <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
@@ -159,7 +145,7 @@ function ShopHeader({ viewer }: { viewer: ViewerState }) {
               <button
                 type="button"
                 aria-label="Abrir menú"
-                className="inline-flex size-10 items-center justify-center rounded-lg border border-sky-200 bg-white text-sky-950 transition hover:bg-sky-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 md:hidden"
+                className="inline-flex size-11 items-center justify-center rounded-xl border-2 border-sky-200 bg-white text-sky-950 shadow-sm transition hover:bg-sky-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 md:hidden"
               />
             }
           >
@@ -184,14 +170,30 @@ function ShopHeader({ viewer }: { viewer: ViewerState }) {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-2.5">
                 <LinkButton
                   href="/catalogo"
                   variant={pathname === "/catalogo" ? "default" : "outline"}
-                  className="w-full justify-start"
+                  className={mobileNavButtonClass}
                   onClick={() => setMenuOpen(false)}
                 >
                   Catálogo
+                </LinkButton>
+
+                <LinkButton
+                  href="/carrito"
+                  variant="outline"
+                  className={mobileNavButtonClass}
+                  aria-label="Carrito"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  <ShoppingCart />
+                  Carrito
+                  {count > 0 ? (
+                    <span className="ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-sky-600 px-1.5 text-[11px] font-bold leading-none text-white">
+                      {count}
+                    </span>
+                  ) : null}
                 </LinkButton>
 
                 {viewer.authenticated ? (
@@ -200,39 +202,17 @@ function ShopHeader({ viewer }: { viewer: ViewerState }) {
                       <LinkButton
                         href="/admin"
                         variant="outline"
-                        className="w-full justify-start"
+                        className={mobileNavButtonClass}
                         onClick={() => setMenuOpen(false)}
                       >
-                        <LayoutDashboard className="size-4" />
+                        <LayoutDashboard />
                         Admin
                       </LinkButton>
                     ) : null}
 
-                    {viewer.approved || viewer.admin ? (
-                      <LinkButton
-                        href="/carrito"
-                        variant="outline"
-                        className="w-full justify-start"
-                        aria-label="Carrito"
-                        onClick={() => setMenuOpen(false)}
-                      >
-                        <ShoppingCart className="size-4" />
-                        Carrito
-                        {count > 0 ? (
-                          <Badge className="ml-auto size-5 justify-center rounded-full p-0 text-[10px]">
-                            {count}
-                          </Badge>
-                        ) : null}
-                      </LinkButton>
-                    ) : (
-                      <Badge variant="secondary" className="w-fit rounded-full px-3">
-                        Pendiente
-                      </Badge>
-                    )}
-
                     <Button
                       variant="outline"
-                      className="w-full justify-start"
+                      className={mobileNavButtonClass}
                       onClick={async () => {
                         await logout()
                         setMenuOpen(false)
@@ -240,45 +220,35 @@ function ShopHeader({ viewer }: { viewer: ViewerState }) {
                       disabled={loggingOut}
                     >
                       {loggingOut ? (
-                        <span className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                        <span className="size-[1.125rem] animate-spin rounded-full border-2 border-current border-t-transparent" />
                       ) : (
-                        <LogOut className="size-4" />
+                        <LogOut />
                       )}
                       Salir
                     </Button>
-
-                    <LinkButton
-                      href={APP_CONFIG.instagramUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      variant="ghost"
-                      className="w-full justify-start"
-                    >
-                      <Camera className="size-4" />
-                      Instagram
-                    </LinkButton>
                   </>
                 ) : (
-                  <>
-                    <LinkButton
-                      href="/login"
-                      variant="outline"
-                      className="w-full justify-start"
-                      onClick={() => setMenuOpen(false)}
-                    >
-                      <LogIn className="size-4" />
-                      Ingresar
-                    </LinkButton>
-                    <LinkButton
-                      href="/register"
-                      className="w-full justify-start"
-                      onClick={() => setMenuOpen(false)}
-                    >
-                      <UserPlus className="size-4" />
-                      Registrarse
-                    </LinkButton>
-                  </>
+                  <LinkButton
+                    href="/login"
+                    variant="outline"
+                    className={mobileNavButtonClass}
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    <LogIn />
+                    Ingresar
+                  </LinkButton>
                 )}
+
+                <LinkButton
+                  href={APP_CONFIG.instagramUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  variant="outline"
+                  className={mobileNavButtonClass}
+                >
+                  <Camera />
+                  Instagram
+                </LinkButton>
               </div>
             </div>
           </SheetContent>
@@ -304,7 +274,7 @@ function ShopFooter() {
           </span>
           <div>
             <p className="font-medium text-foreground">{APP_CONFIG.companyName}</p>
-            <p>Catálogo privado de productos</p>
+            <p>Catálogo de productos mayoristas</p>
           </div>
         </div>
         <div className="flex items-center gap-4">
@@ -374,12 +344,10 @@ export default function ShopLayout({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <CartProvider>
-      <div className="flex min-h-svh flex-col">
-        <ShopHeader viewer={viewer} />
-        <div className="flex-1">{children}</div>
-        <ShopFooter />
-      </div>
-    </CartProvider>
+    <div className="flex min-h-svh flex-col">
+      <ShopHeader viewer={viewer} />
+      <div className="flex-1">{children}</div>
+      <ShopFooter />
+    </div>
   )
 }

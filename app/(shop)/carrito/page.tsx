@@ -7,6 +7,8 @@ import { useCart } from "@/lib/cart-context"
 import { formatPrice } from "@/lib/format"
 import { APP_CONFIG } from "@/src/config/app-config"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { LinkButton } from "@/components/ui/link-button"
 import { Separator } from "@/components/ui/separator"
 import {
@@ -15,7 +17,6 @@ import {
   Minus,
   Plus,
   ImageOff,
-  MessageCircle,
   Loader2,
 } from "lucide-react"
 
@@ -26,6 +27,7 @@ export default function CarritoPage() {
   const [busyItemId, setBusyItemId] = useState<string | null>(null)
   const [clearing, setClearing] = useState(false)
   const [checkoutLoading, setCheckoutLoading] = useState(false)
+  const [checkoutError, setCheckoutError] = useState("")
 
   useEffect(() => {
     const supabase = createClient()
@@ -66,6 +68,26 @@ export default function CarritoPage() {
 
   function checkout() {
     if (checkoutLoading) return
+
+    const nombreTrim = nombre.trim()
+    const emailTrim = email.trim()
+
+    if (!nombreTrim) {
+      setCheckoutError("Ingresá tu nombre para continuar.")
+      return
+    }
+
+    if (!emailTrim) {
+      setCheckoutError("Ingresá tu correo electrónico para continuar.")
+      return
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrim)) {
+      setCheckoutError("Ingresá un correo electrónico válido.")
+      return
+    }
+
+    setCheckoutError("")
     setCheckoutLoading(true)
 
     if (typeof window !== "undefined") {
@@ -208,16 +230,55 @@ export default function CarritoPage() {
             <span>{formatPrice(total)}</span>
           </div>
 
+          <Separator className="my-4" />
+
+          <div className="space-y-3">
+            <h3 className="text-sm font-medium">Tus datos</h3>
+            <div className="space-y-2">
+              <Label htmlFor="checkout-nombre">Nombre</Label>
+              <Input
+                id="checkout-nombre"
+                value={nombre}
+                onChange={(event) => {
+                  setNombre(event.target.value)
+                  if (checkoutError) setCheckoutError("")
+                }}
+                placeholder="Tu nombre completo"
+                autoComplete="name"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="checkout-email">Correo electrónico</Label>
+              <Input
+                id="checkout-email"
+                type="email"
+                value={email}
+                onChange={(event) => {
+                  setEmail(event.target.value)
+                  if (checkoutError) setCheckoutError("")
+                }}
+                placeholder="tu@email.com"
+                autoComplete="email"
+                required
+              />
+            </div>
+          </div>
+
+          {checkoutError ? (
+            <p className="mt-3 text-sm text-destructive">{checkoutError}</p>
+          ) : null}
+
           <Button
             className="mt-5 w-full"
             size="lg"
             onClick={checkout}
-            disabled={checkoutLoading}
+            disabled={checkoutLoading || !nombre.trim() || !email.trim()}
           >
             {checkoutLoading ? (
               <Loader2 className="size-4 animate-spin" />
             ) : (
-              <MessageCircle className="size-4" />
+              <Image src="/whatsapp.svg" alt="" width={16} height={16} className="size-4" />
             )}
             {checkoutLoading ? "Abriendo WhatsApp..." : "Finalizar por WhatsApp"}
           </Button>
