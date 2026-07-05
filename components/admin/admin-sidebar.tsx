@@ -18,10 +18,12 @@ import {
   Store,
   Menu,
   Camera,
+  Home,
 } from "lucide-react"
 
 const links = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/admin/inicio", label: "Página de inicio", icon: Home },
   { href: "/admin/usuarios", label: "Usuarios", icon: Users },
   { href: "/admin/productos", label: "Productos", icon: Package2 },
 ]

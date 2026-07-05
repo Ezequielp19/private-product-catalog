@@ -3,7 +3,13 @@
 import { useEffect, useMemo, useState } from "react"
 import Image from "next/image"
 import { createClient } from "@/lib/supabase/client"
-import type { Product } from "@/lib/types"
+import type { Product, VariantTipo } from "@/lib/types"
+import {
+  getVariantPresetNames,
+  hydrateVariantsFromPreset,
+  isVariantTipo,
+  VARIANT_PRESETS,
+} from "@/lib/variant-presets"
 import {
   getProductPriceText,
   hasProductVariants,
@@ -42,11 +48,10 @@ import {
   ImageOff,
   ToggleLeft,
   ToggleRight,
+  Star,
 } from "lucide-react"
 
-type AdminProduct = Product & {
-  categoria: string | null
-}
+type AdminProduct = Product
 
 type ProductPricingMode = "single" | "variants"
 
@@ -61,22 +66,16 @@ type ProductFormState = {
   categoria: string
   precio: string
   pricingMode: ProductPricingMode
+  variantTipo: VariantTipo
   variantes: ProductVariantForm[]
   activo: boolean
+  destacadoInicio: boolean
+  ordenInicio: string
   imagen: string | null
 }
 
-const defaultVariantNames = ["Chico", "Mediano", "Grande"]
-
-function createDefaultVariants(): ProductVariantForm[] {
-  return defaultVariantNames.map((nombre) => ({ nombre, precio: "" }))
-}
-
-function hydrateFixedVariants(source: ProductVariantForm[]) {
-  return defaultVariantNames.map((nombre) => {
-    const match = source.find((variant) => variant.nombre === nombre)
-    return { nombre, precio: match?.precio ?? "" }
-  })
+function createDefaultVariants(tipo: VariantTipo): ProductVariantForm[] {
+  return getVariantPresetNames(tipo).map((nombre) => ({ nombre, precio: "" }))
 }
 
 const emptyForm: ProductFormState = {
@@ -85,8 +84,11 @@ const emptyForm: ProductFormState = {
   categoria: "",
   precio: "",
   pricingMode: "single",
+  variantTipo: "liquid",
   variantes: [],
   activo: true,
+  destacadoInicio: false,
+  ordenInicio: "",
   imagen: null,
 }
 
@@ -94,6 +96,7 @@ export default function AdminProductosPage() {
   const [products, setProducts] = useState<AdminProduct[]>([])
   const [loading, setLoading] = useState(true)
   const [variantSchemaReady, setVariantSchemaReady] = useState(false)
+  const [homeSchemaReady, setHomeSchemaReady] = useState(false)
   const [saving, setSaving] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [query, setQuery] = useState("")
@@ -105,13 +108,15 @@ export default function AdminProductosPage() {
 
   useEffect(() => {
     loadProducts()
-    checkVariantSchema()
+    checkSchemas()
   }, [])
 
-  async function checkVariantSchema() {
+  async function checkSchemas() {
     const supabase = createClient()
-    const { error } = await supabase.from("products").select("modo_precio, variantes").limit(1)
-    setVariantSchemaReady(!error)
+    const variantCheck = await supabase.from("products").select("modo_precio, variantes, tipo_variante").limit(1)
+    const homeCheck = await supabase.from("products").select("destacado_inicio, orden_inicio").limit(1)
+    setVariantSchemaReady(!variantCheck.error)
+    setHomeSchemaReady(!homeCheck.error)
   }
 
   async function loadProducts() {
@@ -154,12 +159,17 @@ export default function AdminProductosPage() {
   }
 
   function openEdit(product: AdminProduct) {
-    const variants = hydrateFixedVariants(
-      normalizeProductVariants(product.variantes).map((variant) => ({
-        nombre: variant.nombre,
-        precio: String(variant.precio),
-      })),
-    )
+    const variantTipo = isVariantTipo(product.tipo_variante) ? product.tipo_variante : "liquid"
+    const variants =
+      product.modo_precio === "variants"
+        ? hydrateVariantsFromPreset(
+            variantTipo,
+            normalizeProductVariants(product.variantes).map((variant) => ({
+              nombre: variant.nombre,
+              precio: variant.precio,
+            })),
+          )
+        : []
 
     setEditing(product)
     setForm({
@@ -168,8 +178,11 @@ export default function AdminProductosPage() {
       categoria: product.categoria ?? "",
       precio: String(product.precio ?? ""),
       pricingMode: product.modo_precio === "variants" ? "variants" : "single",
-      variantes: product.modo_precio === "variants" ? variants : [],
+      variantTipo,
+      variantes: variants,
       activo: product.activo,
+      destacadoInicio: !!product.destacado_inicio,
+      ordenInicio: product.orden_inicio != null ? String(product.orden_inicio) : "",
       imagen: product.imagen ?? null,
     })
     setDialogOpen(true)
@@ -201,20 +214,34 @@ export default function AdminProductosPage() {
       return
     }
 
+    const homeFields = homeSchemaReady
+      ? {
+          destacado_inicio: form.destacadoInicio,
+          orden_inicio: form.ordenInicio.trim() ? Number(form.ordenInicio) : null,
+        }
+      : {}
+
     if (form.pricingMode === "variants") {
       if (!variantSchemaReady) {
         toast.error("Falta aplicar la migracion de variantes.")
         return
       }
 
-      const fixedVariants = hydrateFixedVariants(form.variantes)
-      const hasMissingPrice = fixedVariants.some((variant) => !variant.precio.trim())
+      const presetVariants = hydrateVariantsFromPreset(
+        form.variantTipo,
+        form.variantes.map((variant) => ({
+          nombre: variant.nombre,
+          precio: variant.precio,
+        })),
+      )
+      const hasMissingPrice = presetVariants.some((variant) => !variant.precio.trim())
 
       if (hasMissingPrice) {
-        toast.error("Completa el precio de Chico, Mediano y Grande.")
+        toast.error(`Completa el precio de ${VARIANT_PRESETS[form.variantTipo].description}.`)
         return
       }
-      const variantPayload = fixedVariants.map((variant) => ({
+
+      const variantPayload = presetVariants.map((variant) => ({
         nombre: variant.nombre,
         precio: Number(variant.precio) || 0,
       }))
@@ -227,10 +254,12 @@ export default function AdminProductosPage() {
         descripcion: form.descripcion.trim(),
         categoria: form.categoria.trim() || null,
         precio: basePrice,
-        modo_precio: form.pricingMode,
+        modo_precio: "variants" as const,
+        tipo_variante: form.variantTipo,
         variantes: variantPayload,
         activo: form.activo,
         imagen: form.imagen,
+        ...homeFields,
       }
 
       const { error } = editing
@@ -257,8 +286,12 @@ export default function AdminProductosPage() {
       descripcion: form.descripcion.trim(),
       categoria: form.categoria.trim() || null,
       precio: Number(form.precio) || 0,
+      modo_precio: "single" as const,
+      tipo_variante: null,
+      variantes: [],
       activo: form.activo,
       imagen: form.imagen,
+      ...homeFields,
     }
 
     const { error } = editing
@@ -325,17 +358,16 @@ export default function AdminProductosPage() {
       ...current,
       pricingMode,
       variantes:
-        pricingMode === "variants"
-          ? createDefaultVariants()
-          : [],
+        pricingMode === "variants" ? createDefaultVariants(current.variantTipo) : [],
     }))
   }
 
-  function loadFixedVariants() {
+  function setVariantTipo(variantTipo: VariantTipo) {
     setForm((current) => ({
       ...current,
-      pricingMode: "variants",
-      variantes: createDefaultVariants(),
+      variantTipo,
+      variantes:
+        current.pricingMode === "variants" ? createDefaultVariants(variantTipo) : current.variantes,
     }))
   }
 
@@ -345,11 +377,13 @@ export default function AdminProductosPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Productos</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Gestiona el catalogo, imagenes, estado y precios.
+            Gestiona el catalogo, imagenes, variantes y precios.
           </p>
           {!variantSchemaReady ? (
             <p className="mt-2 text-sm text-amber-600">
-              Para usar variantes, ejecuta primero <span className="font-medium">scripts/005_product_variants.sql</span>.
+              Para usar variantes, ejecuta primero{" "}
+              <span className="font-medium">scripts/005_product_variants.sql</span> y{" "}
+              <span className="font-medium">scripts/006_home_and_variant_types.sql</span>.
             </p>
           ) : null}
         </div>
@@ -380,12 +414,13 @@ export default function AdminProductosPage() {
       </div>
 
       <div className="mt-6 overflow-x-auto rounded-2xl border bg-card">
-        <Table className="min-w-[900px]">
+        <Table className="min-w-[980px]">
           <TableHeader>
             <TableRow>
               <TableHead>Producto</TableHead>
               <TableHead>Categoria</TableHead>
               <TableHead>Precio</TableHead>
+              <TableHead>Inicio</TableHead>
               <TableHead>Estado</TableHead>
               <TableHead className="text-right">Acciones</TableHead>
             </TableRow>
@@ -393,13 +428,13 @@ export default function AdminProductosPage() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={5} className="py-12 text-center text-muted-foreground">
+                <TableCell colSpan={6} className="py-12 text-center text-muted-foreground">
                   Cargando productos...
                 </TableCell>
               </TableRow>
             ) : filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="py-12 text-center text-muted-foreground">
+                <TableCell colSpan={6} className="py-12 text-center text-muted-foreground">
                   No hay productos para mostrar.
                 </TableCell>
               </TableRow>
@@ -437,10 +472,24 @@ export default function AdminProductosPage() {
                       <span>{getProductPriceText(product)}</span>
                       <span className="text-xs text-muted-foreground">
                         {hasProductVariants(product)
-                          ? `${normalizeProductVariants(product.variantes).length} variantes`
+                          ? product.tipo_variante === "unit"
+                            ? "X1U / X6U / X12U"
+                            : product.tipo_variante === "liquid"
+                              ? "X1litro / X5litros / X20litros"
+                              : `${normalizeProductVariants(product.variantes).length} variantes`
                           : "Sin variantes"}
                       </span>
                     </div>
+                  </TableCell>
+                  <TableCell>
+                    {product.destacado_inicio ? (
+                      <Badge className="gap-1">
+                        <Star className="size-3 fill-current" />
+                        {product.orden_inicio ?? "-"}
+                      </Badge>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">-</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <Badge variant={product.activo ? "default" : "secondary"}>
@@ -588,11 +637,24 @@ export default function AdminProductosPage() {
                 ) : (
                   <div className="space-y-3 rounded-xl border bg-muted/20 p-3">
                     <p className="text-xs text-muted-foreground">
-                      Solo se usan estas variantes: Chico, Mediano y Grande.
+                      Elegí el tipo de presentacion para este producto.
                     </p>
-                    <Button type="button" variant="outline" onClick={loadFixedVariants} className="w-full">
-                      Cargar Chico / Mediano / Grande
-                    </Button>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {(Object.keys(VARIANT_PRESETS) as VariantTipo[]).map((tipo) => (
+                        <Button
+                          key={tipo}
+                          type="button"
+                          variant={form.variantTipo === tipo ? "default" : "outline"}
+                          onClick={() => setVariantTipo(tipo)}
+                          className="h-auto flex-col items-start gap-1 px-3 py-3 text-left"
+                        >
+                          <span className="font-medium">{VARIANT_PRESETS[tipo].label}</span>
+                          <span className="text-xs opacity-80">
+                            {VARIANT_PRESETS[tipo].description}
+                          </span>
+                        </Button>
+                      ))}
+                    </div>
                     <div className="space-y-2">
                       {form.variantes.map((variant, index) => (
                         <div
@@ -628,6 +690,41 @@ export default function AdminProductosPage() {
                   }
                 />
               </div>
+
+              {homeSchemaReady ? (
+                <div className="flex flex-col gap-3 rounded-xl border p-3 md:col-span-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <Label htmlFor="destacado-inicio">Destacar en inicio</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Aparece primero en la pagina principal.
+                      </p>
+                    </div>
+                    <Switch
+                      id="destacado-inicio"
+                      checked={form.destacadoInicio}
+                      onCheckedChange={(checked) =>
+                        setForm((current) => ({ ...current, destacadoInicio: checked }))
+                      }
+                    />
+                  </div>
+                  {form.destacadoInicio ? (
+                    <div className="flex flex-col gap-2">
+                      <Label htmlFor="orden-inicio">Orden en inicio</Label>
+                      <Input
+                        id="orden-inicio"
+                        type="number"
+                        min="1"
+                        value={form.ordenInicio}
+                        onChange={(e) =>
+                          setForm((current) => ({ ...current, ordenInicio: e.target.value }))
+                        }
+                        placeholder="1 = primero"
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
 
               <div className="flex flex-col items-start justify-between gap-3 rounded-xl border p-3 sm:flex-row sm:items-center md:col-span-2">
                 <div>

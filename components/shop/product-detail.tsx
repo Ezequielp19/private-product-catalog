@@ -7,6 +7,7 @@ import type { Product } from "@/lib/types"
 import { useCart } from "@/lib/cart-context"
 import { formatPrice } from "@/lib/format"
 import { hasProductVariants, normalizeProductVariants } from "@/lib/product-pricing"
+import { getVariantPickerLabel } from "@/lib/variant-presets"
 import { Button } from "@/components/ui/button"
 import { ShoppingCart, ImageOff, Minus, Plus } from "lucide-react"
 
@@ -59,7 +60,9 @@ export function ProductDetail({ product }: { product: Product }) {
 
         {isVariantProduct ? (
           <div className="space-y-2">
-            <p className="text-sm font-medium">Elegi una variante</p>
+            <p className="text-sm font-medium">
+              {getVariantPickerLabel(product.tipo_variante)}
+            </p>
             <div className="flex flex-wrap gap-2">
               {variants.map((variant) => (
                 <Button

@@ -4,6 +4,12 @@ import { createClient } from "@/lib/supabase/server"
 import { APP_CONFIG } from "@/src/config/app-config"
 import { Badge } from "@/components/ui/badge"
 import { LinkButton } from "@/components/ui/link-button"
+import {
+  getVisibleHomeCategories,
+  HOME_SETTINGS_KEY,
+  mergeHomeCategories,
+  parseHomeSettings,
+} from "@/lib/home-settings"
 import { ArrowRight, Camera, MessageCircle, ShieldCheck } from "lucide-react"
 
 export const dynamic = "force-dynamic"
@@ -14,21 +20,102 @@ type HomeProduct = {
   descripcion: string
   imagen: string | null
   categoria: string | null
+  destacado_inicio: boolean
+  orden_inicio: number | null
+}
+
+function sortFeaturedProducts(products: HomeProduct[]) {
+  return products
+    .filter((product) => product.destacado_inicio)
+    .sort((a, b) => {
+      const orderA = a.orden_inicio ?? Number.MAX_SAFE_INTEGER
+      const orderB = b.orden_inicio ?? Number.MAX_SAFE_INTEGER
+      if (orderA !== orderB) return orderA - orderB
+      return a.nombre.localeCompare(b.nombre)
+    })
+}
+
+function ProductCard({ product }: { product: HomeProduct }) {
+  return (
+    <Link
+      href={`/producto/${product.id}`}
+      className="group overflow-hidden rounded-2xl border bg-background transition hover:-translate-y-1 hover:shadow-md"
+    >
+      <div className="relative aspect-square overflow-hidden bg-muted">
+        {product.imagen ? (
+          <Image
+            src={product.imagen}
+            alt={product.nombre}
+            fill
+            sizes="(max-width: 640px) 50vw, 280px"
+            className="object-cover transition-transform duration-300 group-hover:scale-105"
+          />
+        ) : null}
+      </div>
+      <div className="space-y-1 p-3">
+        <h3 className="line-clamp-1 font-medium">{product.nombre}</h3>
+        <p className="line-clamp-2 text-sm text-muted-foreground">
+          {product.descripcion || "Sin descripción."}
+        </p>
+      </div>
+    </Link>
+  )
 }
 
 export default async function HomePage() {
   const supabase = await createClient()
-  const { data } = await supabase
-    .from("products")
-    .select("id, nombre, descripcion, imagen, categoria")
-    .eq("activo", true)
-    .order("created_at", { ascending: false })
-    .limit(8)
 
-  const products = (data ?? []) as HomeProduct[]
-  const categories = Array.from(
+  const [{ data: productsData }, settingsResult] = await Promise.all([
+    supabase
+      .from("products")
+      .select("id, nombre, descripcion, imagen, categoria, destacado_inicio, orden_inicio")
+      .eq("activo", true)
+      .order("created_at", { ascending: false }),
+    supabase.from("site_settings").select("value").eq("key", HOME_SETTINGS_KEY).maybeSingle(),
+  ])
+
+  const products = (productsData ?? []) as HomeProduct[]
+  const categoryNames = Array.from(
     new Set(products.map((product) => product.categoria).filter(Boolean)),
-  ).slice(0, 6) as string[]
+  ) as string[]
+
+  const savedSettings = settingsResult.error
+    ? { categories: [] }
+    : parseHomeSettings(settingsResult.data?.value)
+  const homeCategories = getVisibleHomeCategories(
+    savedSettings.categories.length > 0
+      ? mergeHomeCategories(savedSettings.categories, categoryNames)
+      : mergeHomeCategories(
+          categoryNames.map((nombre, index) => ({
+            nombre,
+            visible: true,
+            orden: index + 1,
+          })),
+          categoryNames,
+        ),
+  )
+
+  const featuredProducts = sortFeaturedProducts(products).slice(0, 4)
+  const heroProducts =
+    featuredProducts.length > 0 ? featuredProducts : products.slice(0, 4)
+
+  const categorySections = homeCategories
+    .map((category) => {
+      const categoryProducts = products.filter(
+        (product) => product.categoria === category.nombre,
+      )
+      const featuredInCategory = sortFeaturedProducts(categoryProducts)
+      const sectionProducts =
+        featuredInCategory.length > 0
+          ? featuredInCategory.slice(0, 8)
+          : categoryProducts.slice(0, 4)
+
+      return {
+        category,
+        products: sectionProducts,
+      }
+    })
+    .filter((section) => section.products.length > 0)
 
   const whatsappUrl = `https://wa.me/${APP_CONFIG.whatsappNumber}?text=${encodeURIComponent(
     "Hola, quiero hacer una consulta sobre productos.",
@@ -108,32 +195,8 @@ export default async function HomePage() {
                   Productos destacados
                 </p>
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  {products.slice(0, 4).map((product) => (
-                    <Link
-                      key={product.id}
-                      href={`/producto/${product.id}`}
-                      className="group overflow-hidden rounded-2xl border bg-background transition hover:-translate-y-1 hover:shadow-md"
-                    >
-                      <div className="relative aspect-square overflow-hidden bg-muted">
-                        {product.imagen ? (
-                          <Image
-                            src={product.imagen}
-                            alt={product.nombre}
-                            fill
-                            sizes="(max-width: 640px) 50vw, 240px"
-                            className="object-cover transition-transform duration-300 group-hover:scale-105"
-                          />
-                        ) : null}
-                      </div>
-                      <div className="space-y-1 p-3">
-                        <h3 className="line-clamp-1 font-medium">
-                          {product.nombre}
-                        </h3>
-                        <p className="line-clamp-2 text-sm text-muted-foreground">
-                          {product.descripcion || "Sin descripción."}
-                        </p>
-                      </div>
-                    </Link>
+                  {heroProducts.map((product) => (
+                    <ProductCard key={product.id} product={product} />
                   ))}
                 </div>
               </div>
@@ -150,9 +213,7 @@ export default async function HomePage() {
                   </a>
                 </div>
                 <div className="rounded-2xl border bg-background p-4">
-                  <p className="text-sm text-muted-foreground">
-                    Compra simple
-                  </p>
+                  <p className="text-sm text-muted-foreground">Compra simple</p>
                   <p className="mt-2 font-medium">
                     Agregá al carrito y pedí por WhatsApp.
                   </p>
@@ -176,42 +237,42 @@ export default async function HomePage() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-4 py-16">
-        <div className="flex items-end justify-between gap-4">
-          <div>
-            <p className="text-sm font-medium uppercase tracking-[0.2em] text-muted-foreground">
-              Categorías
-            </p>
-            <h2 className="mt-2 text-3xl font-semibold tracking-tight">
-              Movimientos rápidos para entrar al catálogo
-            </h2>
-          </div>
-          <Link href="/catalogo" className="hidden text-sm font-medium sm:inline-flex">
-            Ver todo
-          </Link>
-        </div>
+      {categorySections.length > 0 ? (
+        <section className="mx-auto max-w-6xl space-y-12 px-4 py-16">
+          {categorySections.map(({ category, products: sectionProducts }) => (
+            <div key={category.nombre}>
+              <div className="mb-6 flex items-end justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium uppercase tracking-[0.2em] text-muted-foreground">
+                    Categoría
+                  </p>
+                  <h2 className="mt-2 text-3xl font-semibold tracking-tight">
+                    {category.nombre}
+                  </h2>
+                </div>
+                <Link
+                  href={`/catalogo?categoria=${encodeURIComponent(category.nombre)}`}
+                  className="hidden text-sm font-medium sm:inline-flex"
+                >
+                  Ver todo
+                </Link>
+              </div>
 
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {categories.length > 0 ? (
-            categories.map((category) => (
-              <Link
-                key={category}
-                href={`/catalogo?categoria=${encodeURIComponent(category)}`}
-                className="group rounded-3xl border bg-card p-5 transition hover:-translate-y-1 hover:border-primary/30 hover:shadow-md"
-              >
-                <p className="text-sm text-muted-foreground">Categoría</p>
-                <p className="mt-2 text-xl font-semibold group-hover:text-primary">
-                  {category}
-                </p>
-              </Link>
-            ))
-          ) : (
-            <div className="rounded-3xl border border-dashed bg-card p-8 text-muted-foreground sm:col-span-3">
-              Aún no hay categorías cargadas.
+              <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+                {sectionProducts.map((product) => (
+                  <ProductCard key={product.id} product={product} />
+                ))}
+              </div>
             </div>
-          )}
-        </div>
-      </section>
+          ))}
+        </section>
+      ) : (
+        <section className="mx-auto max-w-6xl px-4 py-16">
+          <div className="rounded-3xl border border-dashed bg-card p-8 text-center text-muted-foreground">
+            Aún no hay categorías configuradas para el inicio.
+          </div>
+        </section>
+      )}
     </main>
   )
 }
