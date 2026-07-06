@@ -10,6 +10,7 @@ import {
   mergeHomeCategories,
   parseHomeSettings,
 } from "@/lib/home-settings"
+import { HowToBuyTutorial } from "@/components/shop/how-to-buy-tutorial"
 import { ArrowRight, Camera, MessageCircle, ShieldCheck } from "lucide-react"
 
 export const dynamic = "force-dynamic"
@@ -236,6 +237,8 @@ export default async function HomePage() {
           </div>
         </div>
       </section>
+
+      <HowToBuyTutorial />
 
       {categorySections.length > 0 ? (
         <section className="mx-auto max-w-6xl space-y-12 px-4 py-16">
