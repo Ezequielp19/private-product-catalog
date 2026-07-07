@@ -41,11 +41,11 @@ const steps = [
         <div className="space-y-2">
           <p>
             Producto suelto:{" "}
-            <span className="font-medium text-foreground">X5litros</span> × 2 unidades
+            <span className="font-medium text-foreground">x5 litros</span> × 2 unidades
           </p>
           <p>
             Producto por unidad:{" "}
-            <span className="font-medium text-foreground">X6U</span> × 1 unidad
+            <span className="font-medium text-foreground">x6 U</span> × 1 unidad
           </p>
         </div>
       ),
@@ -63,8 +63,8 @@ const steps = [
       label: "Ejemplo de pedido",
       content: (
         <ul className="space-y-1.5 text-foreground/90">
-          <li>• Lavandina (X5litros) x2 — $4.500</li>
-          <li>• Desinfectante (X1U) x1 — $1.200</li>
+          <li>• Lavandina (x5 litros) x2 — $4.500</li>
+          <li>• Desinfectante (x1 U) x1 — $1.200</li>
           <li className="border-t border-sky-200/80 pt-1.5 font-medium text-foreground">
             Total: $10.200
           </li>
@@ -79,7 +79,7 @@ const steps = [
     number: "4",
     title: "Completá tus datos",
     description:
-      "Antes de enviar el pedido, completá tu nombre y correo electrónico. No hace falta crear cuenta.",
+      "Antes de enviar el pedido, completá tu nombre y correo electrónico. Podés agregar una aclaración opcional.",
     example: {
       label: "Ejemplo",
       content: (
@@ -90,6 +90,10 @@ const steps = [
           <p>
             Email:{" "}
             <span className="font-medium text-foreground">maria@email.com</span>
+          </p>
+          <p>
+            Aclaración:{" "}
+            <span className="font-medium text-foreground">Entregar después de las 17 hs.</span>
           </p>
         </div>
       ),
@@ -109,11 +113,12 @@ const steps = [
         <div className="rounded-lg bg-green-50 p-3 text-xs leading-relaxed text-green-950">
           <p>Hola {APP_CONFIG.companyName}.</p>
           <p className="mt-2">Quiero realizar el siguiente pedido:</p>
-          <p className="mt-2">- Lavandina (X5litros) x2 - $4.500</p>
-          <p>- Desinfectante (X1U) x1 - $1.200</p>
+          <p className="mt-2">- Lavandina (x5 litros) x2 - $4.500</p>
+          <p>- Desinfectante (x1 U) x1 - $1.200</p>
           <p className="mt-2 font-medium">Total: $10.200</p>
           <p className="mt-2">Nombre: María Gómez</p>
           <p>Email: maria@email.com</p>
+          <p className="mt-2">Aclaración: Entregar después de las 17 hs.</p>
         </div>
       ),
     },

@@ -473,9 +473,9 @@ export default function AdminProductosPage() {
                       <span className="text-xs text-muted-foreground">
                         {hasProductVariants(product)
                           ? product.tipo_variante === "unit"
-                            ? "X1U / X6U / X12U"
+                            ? "x1 U / x6 U / x12 U"
                             : product.tipo_variante === "liquid"
-                              ? "X1litro / X5litros / X20litros"
+                              ? "x1 litro / x5 litros / x20 litros"
                               : `${normalizeProductVariants(product.variantes).length} variantes`
                           : "Sin variantes"}
                       </span>

@@ -6,9 +6,11 @@ import { createClient } from "@/lib/supabase/client"
 import { useCart } from "@/lib/cart-context"
 import { formatPrice } from "@/lib/format"
 import { APP_CONFIG } from "@/src/config/app-config"
+import { normalizeVariantDisplayName } from "@/lib/variant-presets"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { LinkButton } from "@/components/ui/link-button"
 import { Separator } from "@/components/ui/separator"
 import {
@@ -24,6 +26,7 @@ export default function CarritoPage() {
   const { items, total, count, removeItem, setQuantity, clear } = useCart()
   const [nombre, setNombre] = useState("")
   const [email, setEmail] = useState("")
+  const [aclaracion, setAclaracion] = useState("")
   const [busyItemId, setBusyItemId] = useState<string | null>(null)
   const [clearing, setClearing] = useState(false)
   const [checkoutLoading, setCheckoutLoading] = useState(false)
@@ -47,10 +50,15 @@ export default function CarritoPage() {
   const whatsappUrl = useMemo(() => {
     const lineas = items
       .map((item) => {
-        const variante = item.varianteNombre ? ` (${item.varianteNombre})` : ""
+        const variante = item.varianteNombre
+          ? ` (${normalizeVariantDisplayName(item.varianteNombre)})`
+          : ""
         return `- ${item.nombre}${variante} x${item.cantidad} - ${formatPrice(item.precio * item.cantidad)}`
       })
       .join("\n")
+
+    const aclaracionTrim = aclaracion.trim()
+    const aclaracionBlock = aclaracionTrim ? `Aclaración: ${aclaracionTrim}\n\n` : ""
 
     const mensaje =
       `Hola ${APP_CONFIG.companyName}.\n\n` +
@@ -59,12 +67,13 @@ export default function CarritoPage() {
       `Total: ${formatPrice(total)}\n\n` +
       `Nombre: ${nombre}\n` +
       `Email: ${email}\n\n` +
+      aclaracionBlock +
       `Gracias.`
 
     return `https://wa.me/${APP_CONFIG.whatsappNumber}?text=${encodeURIComponent(
       mensaje,
     )}`
-  }, [email, nombre, items, total])
+  }, [aclaracion, email, nombre, items, total])
 
   function checkout() {
     if (checkoutLoading) return
@@ -169,7 +178,9 @@ export default function CarritoPage() {
               <div className="min-w-0 flex-1">
                 <p className="line-clamp-1 font-medium">{item.nombre}</p>
                 {item.varianteNombre ? (
-                  <p className="text-sm text-muted-foreground">{item.varianteNombre}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {normalizeVariantDisplayName(item.varianteNombre)}
+                  </p>
                 ) : null}
                 <p className="text-sm text-muted-foreground">{formatPrice(item.precio)}</p>
               </div>
@@ -261,6 +272,16 @@ export default function CarritoPage() {
                 placeholder="tu@email.com"
                 autoComplete="email"
                 required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="checkout-aclaracion">Aclaración del pedido (opcional)</Label>
+              <Textarea
+                id="checkout-aclaracion"
+                value={aclaracion}
+                onChange={(event) => setAclaracion(event.target.value)}
+                placeholder="Ej: Entregar por la tarde, retiro en local, cambiar presentación..."
+                rows={3}
               />
             </div>
           </div>

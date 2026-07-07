@@ -7,7 +7,7 @@ import type { Product } from "@/lib/types"
 import { useCart } from "@/lib/cart-context"
 import { formatPrice } from "@/lib/format"
 import { hasProductVariants, normalizeProductVariants } from "@/lib/product-pricing"
-import { getVariantPickerLabel } from "@/lib/variant-presets"
+import { getVariantPickerLabel, normalizeVariantDisplayName } from "@/lib/variant-presets"
 import { Button } from "@/components/ui/button"
 import { ShoppingCart, ImageOff, Minus, Plus } from "lucide-react"
 
@@ -26,7 +26,7 @@ export function ProductDetail({ product }: { product: Product }) {
   const selectedPrice = selectedVariant?.precio ?? product.precio
   const priceLabel = isVariantProduct
     ? selectedVariant
-      ? `${selectedVariant.nombre} - ${formatPrice(selectedVariant.precio)}`
+      ? `${normalizeVariantDisplayName(selectedVariant.nombre)} - ${formatPrice(selectedVariant.precio)}`
       : formatPrice(product.precio)
     : formatPrice(product.precio)
 
@@ -71,7 +71,7 @@ export function ProductDetail({ product }: { product: Product }) {
                   variant={selectedVariantName === variant.nombre ? "default" : "outline"}
                   onClick={() => setSelectedVariantName(variant.nombre)}
                 >
-                  {variant.nombre} - {formatPrice(variant.precio)}
+                  {normalizeVariantDisplayName(variant.nombre)} - {formatPrice(variant.precio)}
                 </Button>
               ))}
             </div>
@@ -107,13 +107,15 @@ export function ProductDetail({ product }: { product: Product }) {
             onClick={() => {
               setAdding(true)
               addItem(product, cantidad, {
-                variantName: isVariantProduct ? selectedVariant?.nombre ?? null : null,
+                variantName: isVariantProduct
+                  ? normalizeVariantDisplayName(selectedVariant?.nombre ?? "")
+                  : null,
                 price: isVariantProduct ? selectedPrice : product.precio,
               })
               toast.success("Agregado al carrito", {
                 description:
                   isVariantProduct && selectedVariant
-                    ? `${cantidad} x ${product.nombre} - ${selectedVariant.nombre}`
+                    ? `${cantidad} x ${product.nombre} - ${normalizeVariantDisplayName(selectedVariant.nombre)}`
                     : `${cantidad} x ${product.nombre}`,
               })
               setAdding(false)
