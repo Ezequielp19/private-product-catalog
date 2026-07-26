@@ -27,7 +27,7 @@ export default async function ProductoPage({
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8">
-      <LinkButton href="/catalogo" variant="ghost" size="sm" className="mb-6 -ml-2">
+      <LinkButton href="/#catalogo" variant="ghost" size="sm" className="mb-6 -ml-2">
         <ChevronLeft className="size-4" />
         Volver al catálogo
       </LinkButton>

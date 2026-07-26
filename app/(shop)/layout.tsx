@@ -67,8 +67,8 @@ function ShopHeader({ viewer }: { viewer: ViewerState }) {
 
         <nav className="hidden flex-nowrap items-center gap-2 overflow-x-auto md:flex">
           <LinkButton
-            href="/catalogo"
-            variant={pathname === "/catalogo" ? "default" : "outline"}
+            href="/#catalogo"
+            variant={pathname === "/" || pathname === "/catalogo" ? "default" : "outline"}
             className={headerNavButtonClass}
           >
             Catálogo
@@ -172,8 +172,8 @@ function ShopHeader({ viewer }: { viewer: ViewerState }) {
 
               <div className="flex flex-col gap-2.5">
                 <LinkButton
-                  href="/catalogo"
-                  variant={pathname === "/catalogo" ? "default" : "outline"}
+                  href="/#catalogo"
+                  variant={pathname === "/" || pathname === "/catalogo" ? "default" : "outline"}
                   className={mobileNavButtonClass}
                   onClick={() => setMenuOpen(false)}
                 >
@@ -278,7 +278,7 @@ function ShopFooter() {
           </div>
         </div>
         <div className="flex items-center gap-4">
-          <a href="/catalogo" className="inline-flex items-center gap-2 hover:text-foreground">
+          <a href="/#catalogo" className="inline-flex items-center gap-2 hover:text-foreground">
             <House className="size-4" />
             Inicio
           </a>

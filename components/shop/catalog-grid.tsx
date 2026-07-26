@@ -42,7 +42,7 @@ export function CatalogGrid({
           <span className="text-sm text-muted-foreground">
             Categoría: <span className="font-medium text-foreground">{initialCategory}</span>
           </span>
-          <LinkButton href="/catalogo" variant="outline" size="sm">
+          <LinkButton href="/#catalogo" variant="outline" size="sm">
             Ver todo
           </LinkButton>
         </div>

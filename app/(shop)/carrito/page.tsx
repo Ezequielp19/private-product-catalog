@@ -132,7 +132,7 @@ export default function CarritoPage() {
         <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed py-16 text-center text-muted-foreground">
           <ShoppingCart className="size-10" />
           <p>Tu carrito esta vacio.</p>
-          <LinkButton href="/catalogo">Ir al catalogo</LinkButton>
+          <LinkButton href="/#catalogo">Ir al catalogo</LinkButton>
         </div>
       </main>
     )

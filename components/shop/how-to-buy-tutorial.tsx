@@ -27,7 +27,7 @@ const steps = [
       ),
     },
     icon: Search,
-    href: "/catalogo",
+    href: "/#catalogo",
     cta: "Ir al catálogo",
   },
   {
@@ -51,7 +51,7 @@ const steps = [
       ),
     },
     icon: ShoppingCart,
-    href: "/catalogo",
+    href: "/#catalogo",
     cta: "Ver productos",
   },
   {
@@ -208,7 +208,7 @@ export function HowToBuyTutorial() {
             </div>
             <div className="flex flex-wrap gap-3">
               <LinkButton
-                href="/catalogo"
+                href="/#catalogo"
                 size="lg"
                 className="bg-white text-sky-700 hover:bg-sky-50"
               >
