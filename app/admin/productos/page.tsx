@@ -1,12 +1,13 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import Image from "next/image"
 import { createClient } from "@/lib/supabase/client"
 import type { Product, VariantTipo } from "@/lib/types"
 import {
   getVariantPresetNames,
   hydrateVariantsFromPreset,
+  inferVariantTipoFromNames,
   isVariantTipo,
   VARIANT_PRESETS,
 } from "@/lib/variant-presets"
@@ -21,6 +22,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
+import { Separator } from "@/components/ui/separator"
 import {
   Dialog,
   DialogContent,
@@ -29,15 +31,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import { toast } from "sonner"
+import { cn } from "@/lib/utils"
 import {
   Plus,
   Pencil,
@@ -49,7 +44,11 @@ import {
   ToggleLeft,
   ToggleRight,
   Star,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react"
+
+const PAGE_SIZE = 10
 
 type AdminProduct = Product
 
@@ -84,7 +83,7 @@ const emptyForm: ProductFormState = {
   categoria: "",
   precio: "",
   pricingMode: "single",
-  variantTipo: "liquid",
+  variantTipo: "unit",
   variantes: [],
   activo: true,
   destacadoInicio: false,
@@ -92,14 +91,34 @@ const emptyForm: ProductFormState = {
   imagen: null,
 }
 
+function variantSummary(product: AdminProduct) {
+  if (!hasProductVariants(product)) return "Precio único"
+  if (
+    product.tipo_variante === "unit" ||
+    inferVariantTipoFromNames(product.variantes) === "unit"
+  ) {
+    return "x 1u · x 6u · x 12u"
+  }
+  if (
+    product.tipo_variante === "liquid" ||
+    inferVariantTipoFromNames(product.variantes) === "liquid"
+  ) {
+    return "x1litro · x5litros · x20litros"
+  }
+  return `${normalizeProductVariants(product.variantes).length} variantes`
+}
+
 export default function AdminProductosPage() {
   const [products, setProducts] = useState<AdminProduct[]>([])
   const [loading, setLoading] = useState(true)
+  const [totalCount, setTotalCount] = useState(0)
+  const [page, setPage] = useState(1)
   const [variantSchemaReady, setVariantSchemaReady] = useState(false)
   const [homeSchemaReady, setHomeSchemaReady] = useState(false)
   const [saving, setSaving] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [query, setQuery] = useState("")
+  const [debouncedQuery, setDebouncedQuery] = useState("")
   const [onlyActive, setOnlyActive] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<AdminProduct | null>(null)
@@ -107,50 +126,77 @@ export default function AdminProductosPage() {
   const [uploading, setUploading] = useState(false)
 
   useEffect(() => {
-    loadProducts()
-    checkSchemas()
-  }, [])
+    const timer = window.setTimeout(() => setDebouncedQuery(query.trim()), 300)
+    return () => window.clearTimeout(timer)
+  }, [query])
 
-  async function checkSchemas() {
-    const supabase = createClient()
-    const variantCheck = await supabase.from("products").select("modo_precio, variantes, tipo_variante").limit(1)
-    const homeCheck = await supabase.from("products").select("destacado_inicio, orden_inicio").limit(1)
-    setVariantSchemaReady(!variantCheck.error)
-    setHomeSchemaReady(!homeCheck.error)
-  }
+  useEffect(() => {
+    setPage(1)
+  }, [debouncedQuery, onlyActive])
 
-  async function loadProducts() {
+  const loadProducts = useCallback(async () => {
     setLoading(true)
     const supabase = createClient()
-    const { data, error } = await supabase
+    const normalized = debouncedQuery.toLowerCase()
+    const from = (page - 1) * PAGE_SIZE
+    const to = from + PAGE_SIZE - 1
+
+    let request = supabase
       .from("products")
-      .select("*")
+      .select("*", { count: "exact" })
       .order("created_at", { ascending: false })
+
+    if (onlyActive) {
+      request = request.eq("activo", true)
+    }
+
+    if (normalized) {
+      const pattern = `%${normalized.replace(/[%_]/g, "")}%`
+      request = request.or(
+        `nombre.ilike.${pattern},descripcion.ilike.${pattern},categoria.ilike.${pattern}`,
+      )
+    }
+
+    const { data, error, count } = await request.range(from, to)
 
     if (error) {
       toast.error("No se pudieron cargar los productos.")
       setProducts([])
+      setTotalCount(0)
       setLoading(false)
       return
     }
 
     setProducts((data ?? []) as AdminProduct[])
+    setTotalCount(count ?? 0)
     setLoading(false)
+  }, [debouncedQuery, onlyActive, page])
+
+  useEffect(() => {
+    void loadProducts()
+  }, [loadProducts])
+
+  useEffect(() => {
+    void checkSchemas()
+  }, [])
+
+  async function checkSchemas() {
+    const supabase = createClient()
+    const variantCheck = await supabase
+      .from("products")
+      .select("modo_precio, variantes, tipo_variante")
+      .limit(1)
+    const homeCheck = await supabase
+      .from("products")
+      .select("destacado_inicio, orden_inicio")
+      .limit(1)
+    setVariantSchemaReady(!variantCheck.error)
+    setHomeSchemaReady(!homeCheck.error)
   }
 
-  const filtered = useMemo(() => {
-    const normalized = query.trim().toLowerCase()
-    return products.filter((product) => {
-      const matchesQuery =
-        !normalized ||
-        product.nombre.toLowerCase().includes(normalized) ||
-        product.descripcion.toLowerCase().includes(normalized) ||
-        (product.categoria ?? "").toLowerCase().includes(normalized)
-
-      const matchesActive = !onlyActive || product.activo
-      return matchesQuery && matchesActive
-    })
-  }, [products, query, onlyActive])
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+  const rangeStart = totalCount === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
+  const rangeEnd = Math.min(page * PAGE_SIZE, totalCount)
 
   function openNew() {
     setEditing(null)
@@ -159,16 +205,17 @@ export default function AdminProductosPage() {
   }
 
   function openEdit(product: AdminProduct) {
-    const variantTipo = isVariantTipo(product.tipo_variante) ? product.tipo_variante : "liquid"
+    const normalizedVariants = normalizeProductVariants(product.variantes).map((variant) => ({
+      nombre: variant.nombre,
+      precio: variant.precio,
+    }))
+    const inferredTipo = inferVariantTipoFromNames(normalizedVariants)
+    const variantTipo = isVariantTipo(product.tipo_variante)
+      ? product.tipo_variante
+      : inferredTipo ?? "unit"
     const variants =
       product.modo_precio === "variants"
-        ? hydrateVariantsFromPreset(
-            variantTipo,
-            normalizeProductVariants(product.variantes).map((variant) => ({
-              nombre: variant.nombre,
-              precio: variant.precio,
-            })),
-          )
+        ? hydrateVariantsFromPreset(variantTipo, normalizedVariants)
         : []
 
     setEditing(product)
@@ -341,7 +388,11 @@ export default function AdminProductosPage() {
     }
 
     toast.success("Producto eliminado")
-    await loadProducts()
+    if (products.length === 1 && page > 1) {
+      setPage((current) => current - 1)
+    } else {
+      await loadProducts()
+    }
   }
 
   function updateVariantPrice(index: number, value: string) {
@@ -362,6 +413,19 @@ export default function AdminProductosPage() {
     }))
   }
 
+  function fillAllVariantPricesFromSingle() {
+    setForm((current) => {
+      if (!current.precio.trim()) return current
+      return {
+        ...current,
+        variantes: current.variantes.map((variant) => ({
+          ...variant,
+          precio: current.precio,
+        })),
+      }
+    })
+  }
+
   function setVariantTipo(variantTipo: VariantTipo) {
     setForm((current) => ({
       ...current,
@@ -377,15 +441,8 @@ export default function AdminProductosPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Productos</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Gestiona el catalogo, imagenes, variantes y precios.
+            Listado paginado de a {PAGE_SIZE} productos. Buscá, editá precios y variantes.
           </p>
-          {!variantSchemaReady ? (
-            <p className="mt-2 text-sm text-amber-600">
-              Para usar variantes, ejecuta primero{" "}
-              <span className="font-medium">scripts/005_product_variants.sql</span> y{" "}
-              <span className="font-medium">scripts/006_home_and_variant_types.sql</span>.
-            </p>
-          ) : null}
         </div>
 
         <Button onClick={openNew} className="w-full sm:w-auto">
@@ -394,162 +451,59 @@ export default function AdminProductosPage() {
         </Button>
       </div>
 
-      <div className="mt-6 grid gap-3 md:grid-cols-[1fr_auto]">
-        <div className="relative">
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar por nombre, descripcion o categoria..."
+            placeholder="Buscar por nombre, descripción o categoría..."
             className="pl-9"
           />
         </div>
         <Button
           variant={onlyActive ? "default" : "outline"}
           onClick={() => setOnlyActive((value) => !value)}
-          className="w-full md:w-auto"
+          className="w-full sm:w-auto"
         >
-          {onlyActive ? "Mostrando activos" : "Ver solo activos"}
+          {onlyActive ? "Solo activos" : "Todos los productos"}
         </Button>
       </div>
 
-      <div className="mt-6 overflow-x-auto rounded-2xl border bg-card">
-        <Table className="min-w-[980px]">
-          <TableHeader>
-            <TableRow>
-              <TableHead>Producto</TableHead>
-              <TableHead>Categoria</TableHead>
-              <TableHead>Precio</TableHead>
-              <TableHead>Inicio</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead className="text-right">Acciones</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={6} className="py-12 text-center text-muted-foreground">
-                  Cargando productos...
-                </TableCell>
-              </TableRow>
-            ) : filtered.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="py-12 text-center text-muted-foreground">
-                  No hay productos para mostrar.
-                </TableCell>
-              </TableRow>
-            ) : (
-              filtered.map((product) => (
-                <TableRow key={product.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <div className="relative size-12 overflow-hidden rounded-lg border bg-muted">
-                        {product.imagen ? (
-                          <Image
-                            src={product.imagen}
-                            alt={product.nombre}
-                            fill
-                            sizes="48px"
-                            className="object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-                            <ImageOff className="size-4" />
-                          </div>
-                        )}
-                      </div>
-                      <div>
-                        <p className="font-medium">{product.nombre}</p>
-                        <p className="line-clamp-1 text-sm text-muted-foreground">
-                          {product.descripcion}
-                        </p>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>{product.categoria || "Sin categoria"}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-col">
-                      <span>{getProductPriceText(product)}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {hasProductVariants(product)
-                          ? product.tipo_variante === "unit"
-                            ? "x1 U / x6 U / x12 U"
-                            : product.tipo_variante === "liquid"
-                              ? "x1 litro / x5 litros / x20 litros"
-                              : `${normalizeProductVariants(product.variantes).length} variantes`
-                          : "Sin variantes"}
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {product.destacado_inicio ? (
-                      <Badge className="gap-1">
-                        <Star className="size-3 fill-current" />
-                        {product.orden_inicio ?? "-"}
-                      </Badge>
-                    ) : (
-                      <span className="text-sm text-muted-foreground">-</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={product.activo ? "default" : "secondary"}>
-                      {product.activo ? "Activo" : "Inactivo"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center justify-end gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => toggleActive(product)}
-                        disabled={busyId === product.id}
-                      >
-                        {product.activo ? (
-                          <ToggleRight className="size-4" />
-                        ) : (
-                          <ToggleLeft className="size-4" />
-                        )}
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => openEdit(product)}>
-                        <Pencil className="size-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => deleteProduct(product)}
-                        disabled={busyId === product.id}
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
+        <span>
+          {totalCount === 0
+            ? "Sin resultados"
+            : `Mostrando ${rangeStart}-${rangeEnd} de ${totalCount} productos`}
+        </span>
+        <span>
+          Página {page} de {totalPages}
+        </span>
       </div>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-xl">
-          <DialogHeader>
-            <DialogTitle>{editing ? "Editar producto" : "Nuevo producto"}</DialogTitle>
-            <DialogDescription>
-              Completa los datos del producto y guardalo en el catalogo.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="flex flex-col gap-2">
-              <Label>Imagen</Label>
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-                <div className="relative h-24 w-full overflow-hidden rounded-lg border bg-muted sm:size-20 sm:w-20">
-                  {form.imagen ? (
+      <div className="mt-3 space-y-3">
+        {loading ? (
+          <div className="flex items-center justify-center rounded-2xl border bg-card py-16 text-muted-foreground">
+            <Loader2 className="size-5 animate-spin" />
+          </div>
+        ) : products.length === 0 ? (
+          <div className="rounded-2xl border border-dashed bg-card py-16 text-center text-muted-foreground">
+            No hay productos para mostrar.
+          </div>
+        ) : (
+          products.map((product) => (
+            <article
+              key={product.id}
+              className="flex flex-col gap-4 rounded-2xl border bg-card p-4 sm:flex-row sm:items-center"
+            >
+              <div className="flex min-w-0 flex-1 items-center gap-3">
+                <div className="relative size-14 shrink-0 overflow-hidden rounded-xl border bg-muted">
+                  {product.imagen ? (
                     <Image
-                      src={form.imagen}
-                      alt="Vista previa"
+                      src={product.imagen}
+                      alt={product.nombre}
                       fill
-                      sizes="80px"
+                      sizes="56px"
                       className="object-cover"
                     />
                   ) : (
@@ -558,113 +512,269 @@ export default function AdminProductosPage() {
                     </div>
                   )}
                 </div>
-                <label className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm font-medium hover:bg-accent sm:w-auto">
-                  {uploading ? (
-                    <Loader2 className="size-4 animate-spin" />
+                <div className="min-w-0">
+                  <p className="truncate font-semibold">{product.nombre}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {product.categoria || "Sin categoría"}
+                  </p>
+                  <p className="mt-1 text-sm">
+                    <span className="font-medium">{getProductPriceText(product)}</span>
+                    <span className="text-muted-foreground"> · {variantSummary(product)}</span>
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                {product.destacado_inicio ? (
+                  <Badge variant="secondary" className="gap-1">
+                    <Star className="size-3 fill-current" />
+                    Inicio #{product.orden_inicio ?? "-"}
+                  </Badge>
+                ) : null}
+                <Badge variant={product.activo ? "default" : "secondary"}>
+                  {product.activo ? "Activo" : "Inactivo"}
+                </Badge>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => toggleActive(product)}
+                  disabled={busyId === product.id}
+                  aria-label={product.activo ? "Desactivar" : "Activar"}
+                >
+                  {product.activo ? (
+                    <ToggleRight className="size-4" />
                   ) : (
-                    <Upload className="size-4" />
+                    <ToggleLeft className="size-4" />
                   )}
-                  {uploading ? "Subiendo..." : "Subir imagen"}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      if (file) {
-                        void uploadImage(file)
-                      }
-                    }}
-                    disabled={uploading}
+                </Button>
+                <Button size="sm" onClick={() => openEdit(product)}>
+                  <Pencil className="size-4" />
+                  Editar
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => deleteProduct(product)}
+                  disabled={busyId === product.id}
+                  aria-label="Eliminar"
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              </div>
+            </article>
+          ))
+        )}
+      </div>
+
+      {totalCount > PAGE_SIZE ? (
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page <= 1 || loading}
+            onClick={() => setPage((current) => Math.max(1, current - 1))}
+          >
+            <ChevronLeft className="size-4" />
+            Anterior
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page >= totalPages || loading}
+            onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+          >
+            Siguiente
+            <ChevronRight className="size-4" />
+          </Button>
+        </div>
+      ) : null}
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="flex max-h-[92vh] w-[calc(100vw-1.5rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
+          <DialogHeader className="shrink-0 border-b px-5 py-4 text-left">
+            <DialogTitle>{editing ? "Editar producto" : "Nuevo producto"}</DialogTitle>
+            <DialogDescription>
+              Completá por secciones. Guardá al final cuando termines.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-5 py-4">
+            <div className="space-y-6">
+              <section className="space-y-3">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                  1. Datos del producto
+                </h3>
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                  <div className="relative mx-auto size-24 shrink-0 overflow-hidden rounded-xl border bg-muted sm:mx-0">
+                    {form.imagen ? (
+                      <Image
+                        src={form.imagen}
+                        alt="Vista previa"
+                        fill
+                        sizes="96px"
+                        className="object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                        <ImageOff className="size-6" />
+                      </div>
+                    )}
+                  </div>
+                  <label className="inline-flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed bg-muted/30 px-4 py-6 text-sm font-medium hover:bg-muted/50">
+                    {uploading ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Upload className="size-4" />
+                    )}
+                    {uploading ? "Subiendo imagen..." : "Subir imagen del producto"}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file) void uploadImage(file)
+                      }}
+                      disabled={uploading}
+                    />
+                  </label>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="nombre">Nombre</Label>
+                  <Input
+                    id="nombre"
+                    value={form.nombre}
+                    onChange={(e) =>
+                      setForm((current) => ({ ...current, nombre: e.target.value }))
+                    }
                   />
-                </label>
-              </div>
-            </div>
+                </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="flex flex-col gap-2 md:col-span-2">
-                <Label htmlFor="nombre">Nombre</Label>
-                <Input
-                  id="nombre"
-                  value={form.nombre}
-                  onChange={(e) => setForm((current) => ({ ...current, nombre: e.target.value }))}
-                />
-              </div>
+                <div className="space-y-2">
+                  <Label htmlFor="categoria">Categoría</Label>
+                  <Input
+                    id="categoria"
+                    value={form.categoria}
+                    onChange={(e) =>
+                      setForm((current) => ({ ...current, categoria: e.target.value }))
+                    }
+                    placeholder="Ej: Envases y tapas"
+                  />
+                </div>
 
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="categoria">Categoria</Label>
-                <Input
-                  id="categoria"
-                  value={form.categoria}
-                  onChange={(e) =>
-                    setForm((current) => ({ ...current, categoria: e.target.value }))
-                  }
-                />
-              </div>
+                <div className="space-y-2">
+                  <Label htmlFor="descripcion">Descripción</Label>
+                  <Textarea
+                    id="descripcion"
+                    rows={3}
+                    value={form.descripcion}
+                    onChange={(e) =>
+                      setForm((current) => ({ ...current, descripcion: e.target.value }))
+                    }
+                    placeholder="Opcional"
+                  />
+                </div>
+              </section>
 
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="precio">Precio</Label>
-                <div className="flex flex-wrap gap-2">
-                  <Button
+              <Separator />
+
+              <section className="space-y-3">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                  2. Precios
+                </h3>
+
+                <div className="grid grid-cols-2 gap-2 rounded-xl border bg-muted/20 p-1">
+                  <button
                     type="button"
-                    variant={form.pricingMode === "single" ? "default" : "outline"}
+                    className={cn(
+                      "rounded-lg px-3 py-2.5 text-sm font-medium transition",
+                      form.pricingMode === "single"
+                        ? "bg-background shadow-sm"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
                     onClick={() => setPricingMode("single")}
                   >
-                    Sin variantes
-                  </Button>
-                  <Button
+                    Un solo precio
+                  </button>
+                  <button
                     type="button"
-                    variant={form.pricingMode === "variants" ? "default" : "outline"}
+                    className={cn(
+                      "rounded-lg px-3 py-2.5 text-sm font-medium transition",
+                      form.pricingMode === "variants"
+                        ? "bg-background shadow-sm"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
                     onClick={() => setPricingMode("variants")}
                     disabled={!variantSchemaReady}
                   >
                     Con variantes
-                  </Button>
+                  </button>
                 </div>
 
                 {form.pricingMode === "single" ? (
-                  <Input
-                    id="precio"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={form.precio}
-                    onChange={(e) =>
-                      setForm((current) => ({ ...current, precio: e.target.value }))
-                    }
-                    placeholder="0"
-                  />
-                ) : (
-                  <div className="space-y-3 rounded-xl border bg-muted/20 p-3">
-                    <p className="text-xs text-muted-foreground">
-                      Elegí el tipo de presentacion para este producto.
+                  <div className="space-y-2">
+                    <Label htmlFor="precio">Precio</Label>
+                    <Input
+                      id="precio"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={form.precio}
+                      onChange={(e) =>
+                        setForm((current) => ({ ...current, precio: e.target.value }))
+                      }
+                      placeholder="0"
+                      className="max-w-xs"
+                    />
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      Para tapas, gatillos o accesorios: elegí{" "}
+                      <strong>Con variantes → Por unidades</strong>. Para líquidos:{" "}
+                      <strong>Por litros</strong>.
                     </p>
-                    <div className="grid gap-2 sm:grid-cols-2">
+                  </div>
+                ) : (
+                  <div className="space-y-4 rounded-xl border bg-muted/10 p-4">
+                    <p className="text-sm font-medium">Tipo de variantes</p>
+                    <div className="space-y-2">
                       {(Object.keys(VARIANT_PRESETS) as VariantTipo[]).map((tipo) => (
-                        <Button
+                        <button
                           key={tipo}
                           type="button"
-                          variant={form.variantTipo === tipo ? "default" : "outline"}
                           onClick={() => setVariantTipo(tipo)}
-                          className="h-auto flex-col items-start gap-1 px-3 py-3 text-left"
+                          className={cn(
+                            "w-full rounded-xl border px-4 py-3 text-left transition",
+                            form.variantTipo === tipo
+                              ? "border-sky-500 bg-sky-50 ring-1 ring-sky-500/30"
+                              : "bg-background hover:border-sky-200",
+                          )}
                         >
-                          <span className="font-medium">{VARIANT_PRESETS[tipo].label}</span>
-                          <span className="text-xs opacity-80">
+                          <p className="font-medium">{VARIANT_PRESETS[tipo].label}</p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
                             {VARIANT_PRESETS[tipo].description}
-                          </span>
-                        </Button>
+                          </p>
+                        </button>
                       ))}
                     </div>
-                    <div className="space-y-2">
+
+                    {form.precio.trim() ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={fillAllVariantPricesFromSingle}
+                      >
+                        Usar ${form.precio} en las 3 variantes
+                      </Button>
+                    ) : null}
+
+                    <div className="space-y-3">
+                      <p className="text-sm font-medium">Precio por variante</p>
                       {form.variantes.map((variant, index) => (
-                        <div
-                          key={variant.nombre}
-                          className="grid gap-2 md:grid-cols-[120px_1fr]"
-                        >
-                          <div className="flex items-center rounded-lg border bg-background px-3 text-sm font-medium">
-                            {variant.nombre}
-                          </div>
+                        <div key={variant.nombre} className="space-y-1.5">
+                          <Label htmlFor={`variant-${index}`}>{variant.nombre}</Label>
                           <Input
+                            id={`variant-${index}`}
                             type="number"
                             min="0"
                             step="0.01"
@@ -677,79 +787,82 @@ export default function AdminProductosPage() {
                     </div>
                   </div>
                 )}
-              </div>
+              </section>
 
-              <div className="flex flex-col gap-2 md:col-span-2">
-                <Label htmlFor="descripcion">Descripcion</Label>
-                <Textarea
-                  id="descripcion"
-                  rows={5}
-                  value={form.descripcion}
-                  onChange={(e) =>
-                    setForm((current) => ({ ...current, descripcion: e.target.value }))
-                  }
-                />
-              </div>
+              <Separator />
 
-              {homeSchemaReady ? (
-                <div className="flex flex-col gap-3 rounded-xl border p-3 md:col-span-2">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <Label htmlFor="destacado-inicio">Destacar en inicio</Label>
-                      <p className="text-xs text-muted-foreground">
-                        Aparece primero en la pagina principal.
-                      </p>
-                    </div>
-                    <Switch
-                      id="destacado-inicio"
-                      checked={form.destacadoInicio}
-                      onCheckedChange={(checked) =>
-                        setForm((current) => ({ ...current, destacadoInicio: checked }))
-                      }
-                    />
+              <section className="space-y-3">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                  3. Publicación
+                </h3>
+
+                <div className="flex items-center justify-between gap-3 rounded-xl border p-4">
+                  <div>
+                    <Label htmlFor="activo">Producto activo</Label>
+                    <p className="text-xs text-muted-foreground">Visible en el catálogo.</p>
                   </div>
-                  {form.destacadoInicio ? (
-                    <div className="flex flex-col gap-2">
-                      <Label htmlFor="orden-inicio">Orden en inicio</Label>
-                      <Input
-                        id="orden-inicio"
-                        type="number"
-                        min="1"
-                        value={form.ordenInicio}
-                        onChange={(e) =>
-                          setForm((current) => ({ ...current, ordenInicio: e.target.value }))
+                  <Switch
+                    id="activo"
+                    checked={form.activo}
+                    onCheckedChange={(checked) =>
+                      setForm((current) => ({ ...current, activo: checked }))
+                    }
+                  />
+                </div>
+
+                {homeSchemaReady ? (
+                  <div className="space-y-3 rounded-xl border p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <Label htmlFor="destacado-inicio">Destacar en inicio</Label>
+                        <p className="text-xs text-muted-foreground">
+                          Aparece primero en la home.
+                        </p>
+                      </div>
+                      <Switch
+                        id="destacado-inicio"
+                        checked={form.destacadoInicio}
+                        onCheckedChange={(checked) =>
+                          setForm((current) => ({ ...current, destacadoInicio: checked }))
                         }
-                        placeholder="1 = primero"
                       />
                     </div>
-                  ) : null}
-                </div>
-              ) : null}
-
-              <div className="flex flex-col items-start justify-between gap-3 rounded-xl border p-3 sm:flex-row sm:items-center md:col-span-2">
-                <div>
-                  <Label htmlFor="activo">Producto activo</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Visible para el catalogo publico.
-                  </p>
-                </div>
-                <Switch
-                  id="activo"
-                  checked={form.activo}
-                  onCheckedChange={(checked) =>
-                    setForm((current) => ({ ...current, activo: checked }))
-                  }
-                />
-              </div>
+                    {form.destacadoInicio ? (
+                      <div className="space-y-2">
+                        <Label htmlFor="orden-inicio">Orden en inicio</Label>
+                        <Input
+                          id="orden-inicio"
+                          type="number"
+                          min="1"
+                          value={form.ordenInicio}
+                          onChange={(e) =>
+                            setForm((current) => ({ ...current, ordenInicio: e.target.value }))
+                          }
+                          placeholder="1 = primero"
+                          className="max-w-[8rem]"
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </section>
             </div>
           </div>
 
-          <DialogFooter className="gap-2 sm:flex-row">
-            <Button variant="outline" onClick={() => setDialogOpen(false)} className="w-full sm:w-auto">
+          <DialogFooter className="shrink-0 gap-2 border-t bg-muted/20 px-5 py-4 sm:flex-row">
+            <Button
+              variant="outline"
+              onClick={() => setDialogOpen(false)}
+              className="w-full sm:w-auto"
+            >
               Cancelar
             </Button>
-            <Button onClick={saveProduct} disabled={saving || uploading} className="w-full sm:w-auto">
-              {saving ? <Loader2 className="size-4 animate-spin" /> : "Guardar"}
+            <Button
+              onClick={saveProduct}
+              disabled={saving || uploading}
+              className="w-full sm:w-auto"
+            >
+              {saving ? <Loader2 className="size-4 animate-spin" /> : "Guardar producto"}
             </Button>
           </DialogFooter>
         </DialogContent>

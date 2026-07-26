@@ -1,7 +1,7 @@
 "use client"
 
 import Image from "next/image"
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { toast } from "sonner"
 import type { Product } from "@/lib/types"
 import { useCart } from "@/lib/cart-context"
@@ -15,10 +15,22 @@ export function ProductDetail({ product }: { product: Product }) {
   const { addItem } = useCart()
   const [cantidad, setCantidad] = useState(1)
   const [adding, setAdding] = useState(false)
-  const variants = normalizeProductVariants(product.variantes)
-  const isVariantProduct = hasProductVariants(product)
+  const variants = useMemo(() => {
+    const seen = new Set<string>()
+    return normalizeProductVariants(product.variantes)
+      .map((variant) => ({
+        ...variant,
+        nombre: normalizeVariantDisplayName(variant.nombre),
+      }))
+      .filter((variant) => {
+        if (seen.has(variant.nombre)) return false
+        seen.add(variant.nombre)
+        return true
+      })
+  }, [product.variantes])
+  const isVariantProduct = hasProductVariants(product) && variants.length > 0
   const [selectedVariantName, setSelectedVariantName] = useState(
-    variants[0]?.nombre ?? "",
+    () => variants[0]?.nombre ?? "",
   )
 
   const selectedVariant =
