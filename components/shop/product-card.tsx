@@ -53,7 +53,7 @@ export function ProductCard({ product }: { product: Product }) {
           </span>
           {hasVariants ? (
             <LinkButton href={`/producto/${product.id}`} size="sm" className="w-full sm:w-auto">
-              Ver variantes
+              Comprar
             </LinkButton>
           ) : (
             <Button
