@@ -25,7 +25,7 @@ import {
 export default function CarritoPage() {
   const { items, total, count, removeItem, setQuantity, clear } = useCart()
   const [nombre, setNombre] = useState("")
-  const [email, setEmail] = useState("")
+  const [direccion, setDireccion] = useState("")
   const [aclaracion, setAclaracion] = useState("")
   const [busyItemId, setBusyItemId] = useState<string | null>(null)
   const [clearing, setClearing] = useState(false)
@@ -37,7 +37,6 @@ export default function CarritoPage() {
     supabase.auth.getUser().then(async ({ data }) => {
       const user = data.user
       if (!user) return
-      setEmail(user.email ?? "")
       const { data: profile } = await supabase
         .from("profiles")
         .select("nombre")
@@ -58,7 +57,7 @@ export default function CarritoPage() {
       .join("\n")
 
     const aclaracionTrim = aclaracion.trim()
-    const aclaracionBlock = aclaracionTrim ? `Aclaración: ${aclaracionTrim}\n\n` : ""
+    const aclaracionBlock = aclaracionTrim ? `Aclaracion: ${aclaracionTrim}\n\n` : ""
 
     const mensaje =
       `Hola ${APP_CONFIG.companyName}.\n\n` +
@@ -66,33 +65,28 @@ export default function CarritoPage() {
       `${lineas}\n\n` +
       `Total: ${formatPrice(total)}\n\n` +
       `Nombre: ${nombre}\n` +
-      `Email: ${email}\n\n` +
+      `Direccion: ${direccion}\n\n` +
       aclaracionBlock +
       `Gracias.`
 
     return `https://wa.me/${APP_CONFIG.whatsappNumber}?text=${encodeURIComponent(
       mensaje,
     )}`
-  }, [aclaracion, email, nombre, items, total])
+  }, [aclaracion, direccion, nombre, items, total])
 
   function checkout() {
     if (checkoutLoading) return
 
     const nombreTrim = nombre.trim()
-    const emailTrim = email.trim()
+    const direccionTrim = direccion.trim()
 
     if (!nombreTrim) {
-      setCheckoutError("Ingresá tu nombre para continuar.")
+      setCheckoutError("Ingresa tu nombre para continuar.")
       return
     }
 
-    if (!emailTrim) {
-      setCheckoutError("Ingresá tu correo electrónico para continuar.")
-      return
-    }
-
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrim)) {
-      setCheckoutError("Ingresá un correo electrónico válido.")
+    if (!direccionTrim) {
+      setCheckoutError("Ingresa tu direccion para continuar.")
       return
     }
 
@@ -260,27 +254,26 @@ export default function CarritoPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="checkout-email">Correo electrónico</Label>
+              <Label htmlFor="checkout-direccion">Direccion</Label>
               <Input
-                id="checkout-email"
-                type="email"
-                value={email}
+                id="checkout-direccion"
+                value={direccion}
                 onChange={(event) => {
-                  setEmail(event.target.value)
+                  setDireccion(event.target.value)
                   if (checkoutError) setCheckoutError("")
                 }}
-                placeholder="tu@email.com"
-                autoComplete="email"
+                placeholder="Tu direccion completa"
+                autoComplete="street-address"
                 required
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="checkout-aclaracion">Aclaración del pedido (opcional)</Label>
+              <Label htmlFor="checkout-aclaracion">Aclaracion del pedido (opcional)</Label>
               <Textarea
                 id="checkout-aclaracion"
                 value={aclaracion}
                 onChange={(event) => setAclaracion(event.target.value)}
-                placeholder="Ej: Entregar por la tarde, retiro en local, cambiar presentación..."
+                placeholder="Ej: Entregar por la tarde, retiro en local, cambiar presentacion..."
                 rows={3}
               />
             </div>
@@ -294,7 +287,7 @@ export default function CarritoPage() {
             className="mt-5 w-full"
             size="lg"
             onClick={checkout}
-            disabled={checkoutLoading || !nombre.trim() || !email.trim()}
+            disabled={checkoutLoading || !nombre.trim() || !direccion.trim()}
           >
             {checkoutLoading ? (
               <Loader2 className="size-4 animate-spin" />
