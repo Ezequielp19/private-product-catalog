@@ -261,12 +261,10 @@ export default function AdminProductosPage() {
       return
     }
 
-    const homeFields = homeSchemaReady
-      ? {
-          destacado_inicio: form.destacadoInicio,
-          orden_inicio: form.ordenInicio.trim() ? Number(form.ordenInicio) : null,
-        }
-      : {}
+    const homeFields = {
+      destacado_inicio: form.destacadoInicio,
+      orden_inicio: form.ordenInicio.trim() ? Number(form.ordenInicio) : null,
+    }
 
     if (form.pricingMode === "variants") {
       if (!variantSchemaReady) {

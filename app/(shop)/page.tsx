@@ -19,19 +19,6 @@ type HomeProduct = {
   descripcion: string
   imagen: string | null
   categoria: string | null
-  destacado_inicio: boolean
-  orden_inicio: number | null
-}
-
-function sortFeaturedProducts(products: HomeProduct[]) {
-  return products
-    .filter((product) => product.destacado_inicio)
-    .sort((a, b) => {
-      const orderA = a.orden_inicio ?? Number.MAX_SAFE_INTEGER
-      const orderB = b.orden_inicio ?? Number.MAX_SAFE_INTEGER
-      if (orderA !== orderB) return orderA - orderB
-      return a.nombre.localeCompare(b.nombre)
-    })
 }
 
 function ProductCard({ product }: { product: HomeProduct }) {
@@ -77,7 +64,7 @@ export default async function HomePage({
       .order("created_at", { ascending: false }),
     supabase
       .from("products")
-      .select("id, nombre, descripcion, imagen, categoria, destacado_inicio, orden_inicio")
+      .select("id, nombre, descripcion, imagen, categoria")
       .eq("activo", true)
       .order("created_at", { ascending: false }),
     supabase.from("site_settings").select("value").eq("key", HOME_SETTINGS_KEY).maybeSingle(),
@@ -112,15 +99,9 @@ export default async function HomePage({
       const categoryProducts = products.filter(
         (product) => product.categoria === category.nombre,
       )
-      const featuredInCategory = sortFeaturedProducts(categoryProducts)
-      const sectionProducts =
-        featuredInCategory.length > 0
-          ? featuredInCategory.slice(0, 8)
-          : categoryProducts.slice(0, 4)
-
       return {
         category,
-        products: sectionProducts,
+        products: categoryProducts,
       }
     })
     .filter((section) => section.products.length > 0)
@@ -174,7 +155,7 @@ export default async function HomePage({
                 </Link>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
                 {sectionProducts.map((product) => (
                   <ProductCard key={product.id} product={product} />
                 ))}
