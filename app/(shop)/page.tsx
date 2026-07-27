@@ -94,6 +94,20 @@ export default async function HomePage({
         ),
   )
 
+  const categoryOrder = new Map(homeCategories.map((category) => [category.nombre, category.orden]))
+
+  const sortedCatalogProducts = [...catalogProducts].sort((a, b) => {
+    const categoryA = categoryOrder.get(a.categoria ?? "") ?? Number.MAX_SAFE_INTEGER
+    const categoryB = categoryOrder.get(b.categoria ?? "") ?? Number.MAX_SAFE_INTEGER
+    if (categoryA !== categoryB) return categoryA - categoryB
+
+    const dateA = new Date(a.created_at).getTime()
+    const dateB = new Date(b.created_at).getTime()
+    if (dateA !== dateB) return dateB - dateA
+
+    return a.nombre.localeCompare(b.nombre)
+  })
+
   const categorySections = homeCategories
     .map((category) => {
       const categoryProducts = products.filter(
@@ -119,7 +133,7 @@ export default async function HomePage({
             </p>
           </div>
 
-          <CatalogGrid products={catalogProducts} initialCategory={categoria} />
+          <CatalogGrid products={sortedCatalogProducts} initialCategory={categoria} />
         </div>
       </section>
 
